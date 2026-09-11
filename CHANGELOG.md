@@ -2,6 +2,16 @@
 
 All notable changes to PR Analyzer are recorded here.
 
+## [0.3.1] - 2026-09-11
+
+### Fixed
+- The diagram renders in colour on first open instead of needing a manual redraw — mermaid's
+  first ELK render is retried once so it no longer falls back to the plain graph.
+
+### Changed
+- Removed the first-run model prompt added in 0.3.0; the always-visible status-bar model button
+  is the model picker.
+
 ## [0.3.0] - 2026-09-11
 
 ### Added

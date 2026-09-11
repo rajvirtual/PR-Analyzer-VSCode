@@ -127,8 +127,6 @@ export function activate(context: vscode.ExtensionContext): void {
 
   registerChatParticipant(context, () => session);
   void refreshModelIndicator();
-  // On a fresh install, offer the model picker once so ordering/Explain don't silently use the default.
-  void maybePromptForModel(context.globalState);
 }
 
 export function deactivate(): void {
@@ -451,25 +449,6 @@ async function refreshModelIndicator(): Promise<void> {
       "Click to choose a different model.",
   );
   modelBar.show();
-}
-
-const MODEL_PROMPT_KEY = "prAnalyzer.modelPromptShown";
-
-async function maybePromptForModel(state: vscode.Memento): Promise<void> {
-  const configured = vscode.workspace
-    .getConfiguration("prAnalyzer")
-    .get<string>("model", "")
-    .trim();
-  // Nudge once, and never after a model has been chosen.
-  if (configured || state.get<boolean>(MODEL_PROMPT_KEY)) return;
-  void state.update(MODEL_PROMPT_KEY, true);
-  const pick = "Pick a model";
-  const choice = await vscode.window.showInformationMessage(
-    "PR Analyzer runs on a Copilot model for file ordering, the map, Explain, and intent. Pick which one to use?",
-    pick,
-    "Not now",
-  );
-  if (choice === pick) await pickModel();
 }
 
 async function openStep(stepId?: string): Promise<void> {

@@ -254,11 +254,30 @@ function centreOn(element: Element): void {
   applyViewBox();
 }
 
+let renderSeq = 0;
+
+/**
+ * The ELK layout module loads on first use, and mermaid's very first render can lose that
+ * race and throw. One retry after a tick lets the loader settle, so the diagram appears
+ * with its colours on first open instead of needing a manual redraw.
+ */
+async function draw(definition: string): Promise<string> {
+  try {
+    return (await mermaid.render(`diagram-${(renderSeq += 1)}`, definition)).svg;
+  } catch (first) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    try {
+      return (await mermaid.render(`diagram-${(renderSeq += 1)}`, definition)).svg;
+    } catch {
+      throw first;
+    }
+  }
+}
+
 async function render(definition: string): Promise<void> {
   surface.innerHTML = "";
   try {
-    const { svg: markup } = await mermaid.render("diagram", definition);
-    surface.innerHTML = markup;
+    surface.innerHTML = await draw(definition);
   } catch (error) {
     setIdle();
     status.textContent = "";
