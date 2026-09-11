@@ -2,6 +2,13 @@
 
 All notable changes to PR Analyzer are recorded here.
 
+## [0.3.3] - 2026-09-11
+
+### Fixed
+- The read-through no longer fails with "did not return a usable read-through" when the model
+  writes real newlines or tabs inside a JSON string (a multi-line "example"). Stray control
+  characters are escaped before the reply is parsed, which also hardens diagram and intent parsing.
+
 ## [0.3.2] - 2026-09-11
 
 ### Fixed
