@@ -8,8 +8,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://dev.azure.com/OpenEnergyPlatform/Garage/_git/ai-workspace",
-    "directory": "PR-Analyzer-VSCode"
+    "url": "https://github.com/rajvirtual/PR-Analyzer-VSCode.git"
+  },
+  "homepage": "https://github.com/rajvirtual/PR-Analyzer-VSCode#readme",
+  "bugs": {
+    "url": "https://github.com/rajvirtual/PR-Analyzer-VSCode/issues"
   },
   "engines": {
     "vscode": "^1.95.0"

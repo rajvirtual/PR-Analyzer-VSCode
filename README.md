@@ -259,7 +259,7 @@ publish a build worth taking, and tell people to reinstall.
 
 ## License
 
-Licensed under the MIT License; the full text is in the LICENSE file.
+MIT — see [LICENSE](LICENSE).
 
 ## Development
 
