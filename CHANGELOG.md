@@ -2,6 +2,14 @@
 
 All notable changes to PR Analyzer are recorded here.
 
+## [0.3.4] - 2026-09-11
+
+### Changed
+- The read-through is generated as plain-text sections instead of one JSON object. A reply that
+  is cut off now still shows every section that finished — the way chat prose does — while
+  keeping the file links and new/changed/context colours. Replies in the old JSON shape are
+  still accepted.
+
 ## [0.3.3] - 2026-09-11
 
 ### Fixed

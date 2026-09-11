@@ -3,7 +3,7 @@ import type { ChangedFile, Step } from "../model/changeset.js";
 import { parseFirstJson } from "./json.js";
 import { runWithTools } from "./run-with-tools.js";
 import { selectModel } from "./select-model.js";
-import { buildStoryPrompt, STORY_SYSTEM_PROMPT, validateStory, type Story } from "./story-prompt.js";
+import { buildStoryPrompt, parseStory, STORY_SYSTEM_PROMPT, validateStory, type Story } from "./story-prompt.js";
 
 export interface StoryOutcome {
   story: Story | null;
@@ -33,7 +33,11 @@ export async function writeStory(input: {
       token: input.token,
     });
 
-    const story = validateStory(parseFirstJson(result.text), input.files);
+    // The section format degrades gracefully; JSON stays as a fallback for a model that
+    // still answers in the old shape.
+    const story =
+      parseStory(result.text, input.files) ??
+      validateStory(parseFirstJson(result.text), input.files);
     if (story) return { story };
 
     return {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildStoryPrompt,
+  parseStory,
   STORY_SYSTEM_PROMPT,
   validateStory,
 } from "../src/lm/story-prompt.js";
@@ -79,6 +80,102 @@ describe("buildStoryPrompt", () => {
 
   it("says how many files the read-through must cover", () => {
     expect(buildStoryPrompt([step(1, "src/Gate.cs")], files)).toContain("all 2 files");
+  });
+});
+
+describe("parseStory", () => {
+  it("reads a section with its kind, path, prose and example", () => {
+    const story = parseStory(
+      [
+        "summary: Admits Standard.",
+        "",
+        "## Gate admits the SKU",
+        "kind: changed",
+        "path: src/Gate.cs",
+        "It resolves a profile instead of comparing to Developer.",
+        "example:",
+        "Developer -> Developer4x   (maps up)",
+        "Standard -> Standard32x",
+      ].join("\n"),
+      files,
+    );
+
+    expect(story?.summary).toBe("Admits Standard.");
+    expect(story?.sections[0]).toMatchObject({
+      title: "Gate admits the SKU",
+      path: "src/Gate.cs",
+      kind: "changed",
+    });
+    expect(story?.sections[0]?.example).toContain("Developer -> Developer4x");
+  });
+
+  it("keeps the sections that finished when the reply is cut off", () => {
+    const story = parseStory(
+      [
+        "## First step",
+        "kind: new",
+        "The first thing that happens.",
+        "",
+        "## Second step",
+        "kind: changed",
+        "The second thing, whose prose stops mid-sen",
+      ].join("\n"),
+      files,
+    );
+
+    expect(story?.sections).toHaveLength(2);
+    expect(story?.sections[1]?.title).toBe("Second step");
+  });
+
+  it("drops a trailing heading that has no prose yet", () => {
+    const story = parseStory(
+      ["## Real", "kind: new", "Has prose.", "", "## Cut off here"].join("\n"),
+      files,
+    );
+
+    expect(story?.sections).toHaveLength(1);
+    expect(story?.sections[0]?.title).toBe("Real");
+  });
+
+  it("drops a path the change does not contain", () => {
+    const story = parseStory(
+      ["## Gate", "path: src/Invented.cs", "Some prose."].join("\n"),
+      files,
+    );
+
+    expect(story?.sections[0]?.path).toBeUndefined();
+  });
+
+  it("defaults a missing kind to changed", () => {
+    const story = parseStory(["## Gate", "Some prose."].join("\n"), files);
+    expect(story?.sections[0]?.kind).toBe("changed");
+  });
+
+  it("captures the before and after state at the end", () => {
+    const story = parseStory(
+      [
+        "## Gate",
+        "kind: new",
+        "Prose.",
+        "",
+        "before: one flat cluster.",
+        "after: master, data and coordinating pools.",
+      ].join("\n"),
+      files,
+    );
+
+    expect(story?.before).toBe("one flat cluster.");
+    expect(story?.after).toBe("master, data and coordinating pools.");
+  });
+
+  it("strips the markdown a title was asked not to carry", () => {
+    const story = parseStory(["## `Ownership gate`", "Prose."].join("\n"), files);
+    expect(story?.sections[0]?.title).toBe("Ownership gate");
+  });
+
+  it("returns null when there are no sections", () => {
+    expect(parseStory("summary: a summary with no sections.", files)).toBeNull();
+    expect(parseStory("not the format at all", files)).toBeNull();
   });
 });
 
