@@ -239,7 +239,7 @@ command and uses each person's own Copilot sign-in — there is nothing else to 
 Download it and run:
 
 ```bash
-code --install-extension pr-analyzer-0.1.0.vsix
+code --install-extension pr-analyzer-0.2.0.vsix
 ```
 
 **From source.**
@@ -248,7 +248,7 @@ code --install-extension pr-analyzer-0.1.0.vsix
 cd PR-Analyzer-VSCode
 npm ci
 npm run package        # writes dist/pr-analyzer-<version>.vsix
-code --install-extension dist/pr-analyzer-0.1.0.vsix
+code --install-extension dist/pr-analyzer-0.2.0.vsix
 ```
 
 Then reload VS Code. Working over Remote-SSH or WSL? Install it in the remote, since that

@@ -2,7 +2,7 @@
 
 All notable changes to PR Analyzer are recorded here.
 
-## [Unreleased]
+## [0.2.0] - 2026-09-11
 
 ### Added
 - **Map intent to evidence** — reads a pull request's description and linked work items, or a
@@ -21,8 +21,13 @@ All notable changes to PR Analyzer are recorded here.
   added.
 - Limited support in untrusted workspaces: diffs and navigation work; repository-wide model
   reads wait for trust.
+- **Auto-clone** — a pull request's repository is cloned automatically (a cached blobless clone)
+  so the whole repository can be read, with a **Clear cached clones** command and a startup prune
+  of clones left unused (`prAnalyzer.clonePruneDays`, default 15).
 
 ### Changed
+- The "repository not cloned" prompt is a modal dialog that waits for your choice instead of
+  disappearing.
 - Pull request files are fetched with bounded concurrency and can be cancelled, so large pull
   requests load faster.
 - Reviews are latest-wins: a newer review can no longer be overwritten by a slower older one,
