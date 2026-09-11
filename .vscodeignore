@@ -1,0 +1,17 @@
+.vscode/**
+.github/**
+src/**
+tests/**
+node_modules/**
+esbuild.mjs
+tsconfig.json
+vitest.config.mts
+.gitignore
+.vscodeignore
+.npmrc
+*.vsix
+**/*.map
+**/*.ts
+media/icon-source.svg
+scripts/**
+azure-pipelines.yml

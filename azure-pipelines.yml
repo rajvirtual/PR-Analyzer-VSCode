@@ -1,0 +1,41 @@
+# Builds the extension and publishes the installable .vsix as a build artifact,
+# so a teammate can download and install it without cloning or building anything.
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - PR-Analyzer-VSCode/**
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  workingDirectory: PR-Analyzer-VSCode
+
+steps:
+  - task: NodeTool@0
+    inputs:
+      versionSpec: "20.x"
+    displayName: Use Node 20
+
+  - script: npm ci
+    workingDirectory: $(workingDirectory)
+    displayName: Install
+
+  - script: npm run typecheck
+    workingDirectory: $(workingDirectory)
+    displayName: Typecheck
+
+  - script: npm test
+    workingDirectory: $(workingDirectory)
+    displayName: Test
+
+  - script: npm run package
+    workingDirectory: $(workingDirectory)
+    displayName: Package
+
+  - publish: $(workingDirectory)/dist
+    artifact: pr-analyzer-vsix
+    displayName: Publish the vsix

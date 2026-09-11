@@ -1,0 +1,6 @@
+node_modules/
+dist/extension.js
+dist/extension.js.map
+*.vsix
+media/diagram.js
+media/diagram.js.map

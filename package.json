@@ -1,0 +1,367 @@
+{
+  "name": "pr-analyzer",
+  "displayName": "PR Analyzer — review a pull request or branch",
+  "description": "Walk a large change in execution order: ordered steps, native diffs, and a map of how the files connect",
+  "version": "0.1.0",
+  "publisher": "rajeshvijay",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://dev.azure.com/OpenEnergyPlatform/Garage/_git/ai-workspace",
+    "directory": "PR-Analyzer-VSCode"
+  },
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "extensionKind": [
+    "workspace"
+  ],
+  "categories": [
+    "SCM Providers",
+    "AI",
+    "Chat",
+    "Other"
+  ],
+  "keywords": [
+    "pull request",
+    "code review",
+    "diff",
+    "azure devops",
+    "walkthrough",
+    "diagram"
+  ],
+  "main": "./dist/extension.js",
+  "icon": "media/icon.png",
+  "pricing": "Free",
+  "activationEvents": [],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Diffs and navigation work in an untrusted workspace. Reading the wider repository for @pr chat, the diagram, and the read-through is disabled until you trust it."
+    }
+  },
+  "contributes": {
+    "chatParticipants": [
+      {
+        "id": "prAnalyzer.chat",
+        "name": "pr",
+        "fullName": "PR Analyzer",
+        "description": "Explain the change you are reviewing",
+        "isSticky": true,
+        "commands": [
+          {
+            "name": "explain",
+            "description": "Explain the change on screen"
+          }
+        ]
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "prAnalyzer",
+          "title": "PR Analyzer",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "prAnalyzer": [
+        {
+          "id": "prAnalyzer.files",
+          "name": "Files",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "prAnalyzer.files",
+        "contents": "Review the changes on this branch, ordered so they read as a flow.\n[Review this branch](command:prAnalyzer.reviewBranch)\nOr review a pull request that is not checked out.\n[Review a pull request](command:prAnalyzer.reviewPullRequest)"
+      }
+    ],
+    "commands": [
+      {
+        "command": "prAnalyzer.reviewBranch",
+        "title": "Review this branch",
+        "category": "PR Analyzer",
+        "icon": "$(play)"
+      },
+      {
+        "command": "prAnalyzer.reviewPullRequest",
+        "title": "Review a pull request by URL",
+        "category": "PR Analyzer",
+        "icon": "$(git-pull-request)"
+      },
+      {
+        "command": "prAnalyzer.showDiagram",
+        "title": "Open the map",
+        "category": "PR Analyzer",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "prAnalyzer.refresh",
+        "title": "Refresh",
+        "category": "PR Analyzer",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "prAnalyzer.next",
+        "title": "Next change, then next file",
+        "category": "PR Analyzer",
+        "icon": "$(chevron-down)"
+      },
+      {
+        "command": "prAnalyzer.previous",
+        "title": "Previous change, then previous file",
+        "category": "PR Analyzer",
+        "icon": "$(chevron-up)"
+      },
+      {
+        "command": "prAnalyzer.setBaseRef",
+        "title": "Set the branch to compare against",
+        "category": "PR Analyzer"
+      },
+      {
+        "command": "prAnalyzer.explainChange",
+        "title": "Explain this change",
+        "category": "PR Analyzer",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "prAnalyzer.addRepositoryFolder",
+        "title": "Add a folder to search for clones",
+        "category": "PR Analyzer"
+      },
+      {
+        "command": "prAnalyzer.showGitLog",
+        "title": "Show the git commands",
+        "category": "PR Analyzer",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "prAnalyzer.toggleFilesView",
+        "title": "Group the files by folder, or flatten them",
+        "category": "PR Analyzer",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "prAnalyzer.signIn",
+        "title": "Sign in to Azure DevOps",
+        "category": "PR Analyzer"
+      },
+      {
+        "command": "prAnalyzer.signOut",
+        "title": "Forget the stored Azure DevOps token",
+        "category": "PR Analyzer"
+      },
+      {
+        "command": "prAnalyzer.explainHunk",
+        "title": "Explain this change",
+        "category": "PR Analyzer"
+      },
+      {
+        "command": "prAnalyzer.showStory",
+        "title": "Read this change end to end",
+        "category": "PR Analyzer",
+        "icon": "$(book)"
+      },
+      {
+        "command": "prAnalyzer.mapIntent",
+        "title": "Map intent to evidence",
+        "category": "PR Analyzer",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "prAnalyzer.addNote",
+        "title": "Add a review note to the pull request",
+        "category": "PR Analyzer",
+        "icon": "$(comment)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "prAnalyzer.next",
+        "key": "alt+down",
+        "when": "prAnalyzer.active"
+      },
+      {
+        "command": "prAnalyzer.previous",
+        "key": "alt+up",
+        "when": "prAnalyzer.active"
+      },
+      {
+        "command": "prAnalyzer.next",
+        "key": "f7",
+        "when": "prAnalyzer.active && isInDiffEditor"
+      },
+      {
+        "command": "prAnalyzer.previous",
+        "key": "shift+f7",
+        "when": "prAnalyzer.active && isInDiffEditor"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "prAnalyzer.refresh",
+          "when": "view == prAnalyzer.files",
+          "group": "navigation@4"
+        },
+        {
+          "command": "prAnalyzer.showDiagram",
+          "when": "view == prAnalyzer.files && prAnalyzer.active",
+          "group": "navigation@3"
+        },
+        {
+          "command": "prAnalyzer.previous",
+          "when": "view == prAnalyzer.files && prAnalyzer.active",
+          "group": "navigation@1"
+        },
+        {
+          "command": "prAnalyzer.next",
+          "when": "view == prAnalyzer.files && prAnalyzer.active",
+          "group": "navigation@2"
+        },
+        {
+          "command": "prAnalyzer.explainChange",
+          "when": "view == prAnalyzer.files && prAnalyzer.active",
+          "group": "navigation@0"
+        },
+        {
+          "command": "prAnalyzer.showGitLog",
+          "when": "view == prAnalyzer.files",
+          "group": "navigation@9"
+        },
+        {
+          "command": "prAnalyzer.toggleFilesView",
+          "when": "view == prAnalyzer.files && prAnalyzer.active",
+          "group": "navigation@8"
+        },
+        {
+          "command": "prAnalyzer.reviewPullRequest",
+          "when": "view == prAnalyzer.files",
+          "group": "1_review@1"
+        },
+        {
+          "command": "prAnalyzer.reviewBranch",
+          "when": "view == prAnalyzer.files",
+          "group": "1_review@2"
+        },
+        {
+          "command": "prAnalyzer.showStory",
+          "when": "view == prAnalyzer.files && prAnalyzer.active",
+          "group": "navigation@5"
+        },
+        {
+          "command": "prAnalyzer.mapIntent",
+          "when": "view == prAnalyzer.files && prAnalyzer.active",
+          "group": "navigation@6"
+        },
+        {
+          "command": "prAnalyzer.addNote",
+          "when": "view == prAnalyzer.files && prAnalyzer.active",
+          "group": "navigation@7"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "prAnalyzer.explainChange",
+          "when": "prAnalyzer.active && prAnalyzer.isReviewDiff",
+          "group": "navigation@0"
+        },
+        {
+          "command": "prAnalyzer.previous",
+          "when": "prAnalyzer.active && prAnalyzer.isReviewDiff",
+          "group": "navigation@1"
+        },
+        {
+          "command": "prAnalyzer.next",
+          "when": "prAnalyzer.active && prAnalyzer.isReviewDiff",
+          "group": "navigation@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "prAnalyzer.explainHunk",
+          "when": "false"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "PR Analyzer",
+      "properties": {
+        "prAnalyzer.baseRef": {
+          "type": "string",
+          "default": "",
+          "description": "Branch to compare against. Empty means detect automatically (origin/main, then origin/master)."
+        },
+        "prAnalyzer.includeUncommitted": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include uncommitted working tree changes, so a change can be reviewed before it is pushed."
+        },
+        "prAnalyzer.ordering": {
+          "type": "string",
+          "enum": [
+            "model",
+            "references"
+          ],
+          "enumDescriptions": [
+            "Ask a Copilot model to order the files as an execution flow, using the language server's reference graph as evidence. Costs one request per review.",
+            "Order from the language server's reference graph alone. No model request."
+          ],
+          "default": "model",
+          "description": "How the reading order is decided."
+        },
+        "prAnalyzer.model": {
+          "type": "string",
+          "default": "",
+          "description": "Model used for ordering and the diagram, by id, family, or part of its name, for example 'claude-opus-5'. Empty uses whichever model Copilot offers first. The @pr chat uses the model chosen in the chat picker instead."
+        },
+        "prAnalyzer.repositorySearchPaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Folders holding your clones, for example '/home/me/repos'. Each is checked for a directory named after the repository; no folder is listed or searched. Choosing Locate it adds one for you."
+        },
+        "prAnalyzer.filesView": {
+          "type": "string",
+          "enum": [
+            "flat",
+            "folders"
+          ],
+          "enumDescriptions": [
+            "One list in reading order, numbered 1 to n, matching F7 exactly.",
+            "The repository's folders, sorted alphabetically like a pull request page. The reading order is not the list's order."
+          ],
+          "default": "flat",
+          "description": "How the Files view is arranged."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p src/webview",
+    "test": "vitest run",
+    "package": "npm run typecheck && npm run test && node esbuild.mjs --production && vsce package --no-dependencies --allow-missing-repository --out dist/"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/vscode": "~1.95.0",
+    "@vscode/vsce": "^3.2.1",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.7.2",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.0"
+  },
+  "dependencies": {
+    "@mermaid-js/layout-elk": "^0.2.3",
+    "mermaid": "^11.17.2"
+  }
+}
