@@ -3,6 +3,7 @@ import type { ChangedFile, Step } from "../model/changeset.js";
 import type { SymbolGraph } from "../analysis/flow-order.js";
 import { buildMermaid, stepIdForNode, type Direction } from "../analysis/mermaid.js";
 import { drawDiagram } from "../lm/draw-diagram.js";
+import { beginExclusiveModelWork, clearExclusiveModelWork } from "../lm/model-gate.js";
 import { pickModel } from "../lm/select-model.js";
 import type { DrawnDiagram } from "../lm/diagram-prompt.js";
 
@@ -178,7 +179,7 @@ export class DiagramPanel {
       this.drawing = true;
       this.drawTokens?.cancel();
       this.drawTokens?.dispose();
-      const tokens = new vscode.CancellationTokenSource();
+      const tokens = beginExclusiveModelWork();
       this.drawTokens = tokens;
       const generation = this.drawGeneration;
       void this.panel.webview.postMessage({
@@ -198,6 +199,7 @@ export class DiagramPanel {
         token: tokens.token,
       });
       this.drawing = false;
+      clearExclusiveModelWork(tokens);
 
       // Inputs changed while drawing; draw the current review rather than publish a
       // diagram of the one it replaced.
@@ -205,6 +207,14 @@ export class DiagramPanel {
         void this.push();
         return;
       }
+
+      // Another model view took over; leave the plain map without a failure notice.
+      if (tokens.token.isCancellationRequested) {
+        this.view = "files";
+        void this.push();
+        return;
+      }
+
       this.drawn = outcome.diagram;
 
       if (!this.drawn) {

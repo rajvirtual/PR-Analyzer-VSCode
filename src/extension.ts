@@ -16,6 +16,11 @@ import { hasEdges, textSymbolGraph } from "./analysis/text-graph.js";
 import { orderStepsWithModel } from "./lm/order-steps.js";
 import { pickModel, selectModel } from "./lm/select-model.js";
 import {
+  beginExclusiveModelWork,
+  clearExclusiveModelWork,
+  registerExclusiveModelWork,
+} from "./lm/model-gate.js";
+import {
   AFTER_SCHEME,
   BEFORE_SCHEME,
   ChangeContentProvider,
@@ -604,6 +609,10 @@ async function showStory(regenerate: boolean): Promise<void> {
     return;
   }
 
+  // Hold the model exclusively only now — re-showing a cached read-through must not
+  // cancel a diagram that is still drawing.
+  registerExclusiveModelWork(tokens);
+
   let model = "";
   panel.busy("Reading the whole change…", model);
 
@@ -618,6 +627,7 @@ async function showStory(regenerate: boolean): Promise<void> {
     },
     token: tokens.token,
   });
+  clearExclusiveModelWork(tokens);
 
   if (outcome.story) {
     story = outcome.story;
@@ -644,7 +654,7 @@ async function mapIntent(): Promise<void> {
     return;
   }
   const changeSet = session.changeSet;
-  const tokens = new vscode.CancellationTokenSource();
+  const tokens = beginExclusiveModelWork();
 
   await vscode.window.withProgress(
     {
@@ -698,6 +708,7 @@ async function mapIntent(): Promise<void> {
         });
         await vscode.window.showTextDocument(document, { preview: true });
       } finally {
+        clearExclusiveModelWork(tokens);
         tokens.dispose();
       }
     },

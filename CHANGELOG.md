@@ -2,6 +2,13 @@
 
 All notable changes to PR Analyzer are recorded here.
 
+## [0.3.2] - 2026-09-11
+
+### Fixed
+- The diagram no longer errors with "the model is not able to…" when a read-through or intent
+  map is started while it is still drawing. Heavy model views now run one at a time — starting
+  one quietly cancels the other instead of racing it for the model.
+
 ## [0.3.1] - 2026-09-11
 
 ### Fixed
