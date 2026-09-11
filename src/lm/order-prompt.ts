@@ -1,4 +1,4 @@
-import type { ChangedFile } from "../model/changeset.js";
+import type { ChangedFile, Effort } from "../model/changeset.js";
 import type { SymbolGraph } from "../analysis/flow-order.js";
 import { renderDigests } from "../analysis/change-digest.js";
 
@@ -6,6 +6,8 @@ export interface OrderedStep {
   path: string;
   /** What happens at this point in the flow, in the model's words. */
   title: string;
+  /** How demanding the change is to review, in the model's judgement. */
+  effort?: Effort;
 }
 
 export const ORDER_SYSTEM_PROMPT = `You put the files of a code change into the order a reviewer should read them.
@@ -39,8 +41,16 @@ You are given two things about each file:
   flow goes; the graph only tells you what is wired to what.
 When the two disagree, believe the code.
 
+For each file, also rate how much careful review its change needs, as "effort":
+- "routine": mechanical or low-risk. A rename, a moved file, a data model or DTO, config,
+  generated code, or a test that mirrors the change.
+- "involved": ordinary logic worth reading, but holding no traps.
+- "complex": dense or subtle logic where a mistake would hide. New control flow, concurrency,
+  intricate conditionals, error handling, or anything touching security or money. Reserve it
+  for the few files that truly earn it.
+
 Reply with a single JSON object and nothing else. No prose, no code fences:
-{"steps":[{"path":"<exact path from the list>","title":"<what happens here, under 10 words>"}]}
+{"steps":[{"path":"<exact path from the list>","title":"<what happens here, under 10 words>","effort":"routine|involved|complex"}]}
 
 Every path must come from the supplied list. Include every file exactly once.`;
 
@@ -85,6 +95,7 @@ export function reconcileOrder(
 ): OrderedStep[] {
   const known = new Set(files.map((file) => file.path));
   const titles = new Map<string, string>();
+  const efforts = new Map<string, Effort>();
   const ordered: string[] = [];
   const seen = new Set<string>();
 
@@ -96,6 +107,8 @@ export function reconcileOrder(
     if (typeof step.title === "string" && step.title.trim()) {
       titles.set(path, step.title.trim());
     }
+    const effort = effortOf(step.effort);
+    if (effort) efforts.set(path, effort);
   }
 
   for (const path of fallbackOrder) {
@@ -112,5 +125,10 @@ export function reconcileOrder(
     }
   }
 
-  return ordered.map((path) => ({ path, title: titles.get(path) ?? "" }));
+  return ordered.map((path) => ({ path, title: titles.get(path) ?? "", effort: efforts.get(path) }));
+}
+
+/** Only the three known ratings survive; anything else is treated as unrated. */
+function effortOf(value: unknown): Effort | undefined {
+  return value === "routine" || value === "involved" || value === "complex" ? value : undefined;
 }

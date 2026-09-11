@@ -2,6 +2,14 @@
 
 All notable changes to PR Analyzer are recorded here.
 
+## [0.4.0] - 2026-09-11
+
+### Added
+- **Change-complexity coding in the Files list** — the ordering model now also rates how much
+  review each file's change needs. Complex changes get a red icon and a "· complex" tag; routine
+  ones (data models, renames, config, tests) get a green icon and "· routine", so review time
+  goes where it matters. The rating also appears in each file's tooltip.
+
 ## [0.3.4] - 2026-09-11
 
 ### Changed

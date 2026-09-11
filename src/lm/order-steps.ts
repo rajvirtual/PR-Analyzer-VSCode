@@ -70,7 +70,7 @@ export async function orderStepsWithModel(input: {
           ...messages,
           vscode.LanguageModelChatMessage.Assistant(raw.slice(0, 2000)),
           vscode.LanguageModelChatMessage.User(
-            'That reply was not the required JSON. Answer the same request again as a single JSON object of the form {"steps":[{"path":"...","title":"..."}]}, using the file list above. No prose.',
+            'That reply was not the required JSON. Answer the same request again as a single JSON object of the form {"steps":[{"path":"...","title":"...","effort":"routine|involved|complex"}]}, using the file list above. No prose.',
           ),
         ],
         token,

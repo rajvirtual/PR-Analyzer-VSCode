@@ -1,4 +1,4 @@
-import type { ChangeSet, ChangedFile, Step } from "./model/changeset.js";
+import type { ChangeSet, ChangedFile, Effort, Step } from "./model/changeset.js";
 import { computeSignals, flowOrder } from "./analysis/ordering-signals.js";
 import { diffLines } from "./analysis/unified-diff.js";
 
@@ -38,7 +38,7 @@ export function hunksOf(file: ChangedFile): Hunk[] {
 
 export function buildSteps(
   changeSet: ChangeSet,
-  order?: { path: string; title?: string }[],
+  order?: { path: string; title?: string; effort?: Effort }[],
 ): Step[] {
   const contents = new Map<string, string>();
   for (const file of changeSet.files) {
@@ -55,7 +55,7 @@ export function buildSteps(
 
   return entries
     .map((entry) => ({ entry, file: byPath.get(entry.path) }))
-    .filter((pair): pair is { entry: { path: string; title?: string }; file: ChangedFile } =>
+    .filter((pair): pair is { entry: { path: string; title?: string; effort?: Effort }; file: ChangedFile } =>
       pair.file !== undefined,
     )
     .map((pair, index) => ({
@@ -64,6 +64,7 @@ export function buildSteps(
       file: pair.file,
       role: roleByPath.get(pair.file.path) ?? "other",
       title: pair.entry.title || undefined,
+      effort: pair.entry.effort,
     }));
 }
 

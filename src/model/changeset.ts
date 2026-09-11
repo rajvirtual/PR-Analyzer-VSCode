@@ -40,6 +40,9 @@ export interface ChangeSet {
   skipped: { path: string; reason: string }[];
 }
 
+/** How much careful review a file's change needs, as rated by the model. */
+export type Effort = "routine" | "involved" | "complex";
+
 /** One file, positioned in the order a reader should meet it. */
 export interface Step {
   id: string;
@@ -49,6 +52,8 @@ export interface Step {
   role: string;
   /** What happens at this point in the flow, when a model has named it. */
   title?: string;
+  /** How demanding the change is to review, when a model has rated it. */
+  effort?: Effort;
 }
 
 /** What to show in place of a side that could not be read. */

@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import type { Step } from "../model/changeset.js";
+import type { Effort, Step } from "../model/changeset.js";
 import type { ReviewSession } from "../session.js";
 import { analyzeTestImpact } from "../analysis/test-impact.js";
 import {
@@ -119,9 +119,10 @@ function fileItem(
   const hunks = countHunks(session, step);
   const title = step.title ?? dirOf(step.file.path);
   const gap = uncovered ? "  \u00b7  no test" : "";
+  const effort = effortLabel(step.effort);
   item.description = inFolders
-    ? `step ${step.order} \u00b7 ${title}${hunks}${gap}`
-    : `${title}${hunks}${gap}`;
+    ? `step ${step.order} \u00b7 ${title}${hunks}${gap}${effort}`
+    : `${title}${hunks}${gap}${effort}`;
   item.tooltip = new vscode.MarkdownString(
     [
       `**${step.file.path}**`,
@@ -129,11 +130,12 @@ function fileItem(
       step.title ? `${step.order}. ${step.title}` : `Step ${step.order}`,
       "",
       `${step.role} \u00b7 ${step.file.changeType}`,
+      ...effortTooltip(step.effort),
       ...(uncovered ? ["", "_Changed with no matching test change._"] : []),
     ].join("\n"),
   );
   item.resourceUri = vscode.Uri.file(step.file.path);
-  item.iconPath = new vscode.ThemeIcon(iconFor(step.role));
+  item.iconPath = new vscode.ThemeIcon(iconFor(step.role), effortColor(step.effort));
   item.contextValue = "prAnalyzer.step";
   item.id = `step:${step.id}`;
   item.command = {
@@ -157,6 +159,26 @@ function dirOf(path: string): string {
   const parts = path.split("/");
   parts.pop();
   return parts.slice(-2).join("/") || ".";
+}
+
+function effortColor(effort?: Effort): vscode.ThemeColor | undefined {
+  if (effort === "complex") return new vscode.ThemeColor("charts.red");
+  if (effort === "routine") return new vscode.ThemeColor("charts.green");
+  return undefined;
+}
+
+/** A short tag, so the rating is not carried by colour alone. */
+function effortLabel(effort?: Effort): string {
+  if (effort === "complex") return "  \u00b7  complex";
+  if (effort === "routine") return "  \u00b7  routine";
+  return "";
+}
+
+function effortTooltip(effort?: Effort): string[] {
+  if (effort === "complex") return ["", "_Complex change \u2014 worth close review._"];
+  if (effort === "involved") return ["", "_Ordinary logic to read._"];
+  if (effort === "routine") return ["", "_Routine change._"];
+  return [];
 }
 
 function iconFor(role: string): string {

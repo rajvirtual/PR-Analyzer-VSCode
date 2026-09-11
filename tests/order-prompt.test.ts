@@ -75,6 +75,11 @@ describe("ORDER_SYSTEM_PROMPT", () => {
   it("forbids leading with a widely depended-on type", () => {
     expect(ORDER_SYSTEM_PROMPT).toContain("not first just because many files depend on it");
   });
+
+  it("asks the model to rate each file's change complexity", () => {
+    expect(ORDER_SYSTEM_PROMPT).toContain("effort");
+    expect(ORDER_SYSTEM_PROMPT).toContain("complex");
+  });
 });
 
 describe("buildOrderPrompt", () => {
@@ -111,6 +116,22 @@ describe("reconcileOrder", () => {
 
     expect(result.map((step) => step.path)).toEqual(["c.ts", "a.ts", "b.ts"]);
     expect(result[0].title).toBe("Entry point");
+  });
+
+  it("carries the effort rating and drops an unknown one", () => {
+    const result = reconcileOrder(
+      files,
+      [
+        { path: "a.ts", title: "Entry", effort: "complex" },
+        { path: "b.ts", title: "Data", effort: "routine" },
+        { path: "c.ts", title: "Odd", effort: "banana" as never },
+      ],
+      ["a.ts", "b.ts", "c.ts"],
+    );
+
+    expect(result.find((step) => step.path === "a.ts")?.effort).toBe("complex");
+    expect(result.find((step) => step.path === "b.ts")?.effort).toBe("routine");
+    expect(result.find((step) => step.path === "c.ts")?.effort).toBeUndefined();
   });
 
   it("discards a path the model invented", () => {
