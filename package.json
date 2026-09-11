@@ -181,6 +181,11 @@
         "title": "Add a review note to the pull request",
         "category": "PR Analyzer",
         "icon": "$(comment)"
+      },
+      {
+        "command": "prAnalyzer.clearClones",
+        "title": "Clear cached clones",
+        "category": "PR Analyzer"
       }
     ],
     "keybindings": [
@@ -330,6 +335,16 @@
           },
           "default": [],
           "description": "Folders holding your clones, for example '/home/me/repos'. Each is checked for a directory named after the repository; no folder is listed or searched. Choosing Locate it adds one for you."
+        },
+        "prAnalyzer.autoClone": {
+          "type": "boolean",
+          "default": true,
+          "description": "When reviewing a pull request whose repository is not already on disk, clone it automatically — a fast blobless clone kept in the extension's storage and reused next time — so the whole repository can be read. Turn off to be asked each time instead."
+        },
+        "prAnalyzer.clonePruneDays": {
+          "type": "number",
+          "default": 15,
+          "description": "Cached clones not used within this many days are removed on startup. Set to 0 to keep them indefinitely."
         },
         "prAnalyzer.filesView": {
           "type": "string",

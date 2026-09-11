@@ -4,6 +4,7 @@ import type { PullRequestIdentity } from "../ado/pr-url.js";
 import { sameRepository } from "./remote-match.js";
 import { cloneUrl } from "./clone-url.js";
 import { runGit } from "./run-git.js";
+import { touchUsage } from "./clone-store.js";
 
 /**
  * Finding, or fetching, a clone of the repository a pull request belongs to.
@@ -160,6 +161,7 @@ export async function offerToClone(
   // A clone made for an earlier review is reused rather than made again.
   const existing = await matchesIdentity(destination, identity);
   if (existing) {
+    await touchUsage(destination);
     try {
       onProgress?.("Updating the clone…");
       await git(existing, ["fetch", "--quiet", "origin"]);
@@ -169,21 +171,25 @@ export async function offerToClone(
     return existing;
   }
 
-  // Modal so the choice waits for the reader rather than vanishing as a notification.
-  const choice = await vscode.window.showInformationMessage(
-    `${identity.repository} is not cloned locally. Clone it to read the whole repository during ` +
-      `review — a fast blobless clone kept in the extension's storage and reused next time. ` +
-      `Otherwise only the pull request's changed files can be read.`,
-    { modal: true, detail: `Looked in:\n${searched.join("\n")}` },
-    "Clone it",
-    "Locate it…",
-    "Continue without",
-  );
+  const autoClone = vscode.workspace.getConfiguration("prAnalyzer").get<boolean>("autoClone", true);
 
-  if (choice === "Locate it…") return locateClone(identity);
-  if (choice !== "Clone it") return null;
+  if (!autoClone) {
+    // Modal so the choice waits for the reader rather than vanishing as a notification.
+    const choice = await vscode.window.showInformationMessage(
+      `${identity.repository} is not cloned locally. Clone it to read the whole repository during ` +
+        `review — a fast blobless clone kept in the extension's storage and reused next time. ` +
+        `Otherwise only the pull request's changed files can be read.`,
+      { modal: true, detail: `Looked in:\n${searched.join("\n")}` },
+      "Clone it",
+      "Locate it…",
+      "Continue without",
+    );
 
-  return vscode.window.withProgress(
+    if (choice === "Locate it…") return locateClone(identity);
+    if (choice !== "Clone it") return null;
+  }
+
+  const cloned = await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
       title: `Cloning ${identity.repository}`,
@@ -214,4 +220,7 @@ export async function offerToClone(
       }
     },
   );
+
+  if (cloned) await touchUsage(cloned);
+  return cloned;
 }

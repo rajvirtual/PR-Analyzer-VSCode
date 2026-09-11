@@ -7,6 +7,7 @@ import { buildPullRequestChangeSet, fetchPullRequestIntent, AdoError } from "./a
 import { createThread } from "./ado/pr-threads.js";
 import { createPullRequestWorktree, type Worktree } from "./git/pr-worktree.js";
 import { addRepositoryFolder, findLocalClone, offerToClone } from "./git/find-clone.js";
+import { pruneOldClones, clearAllClones } from "./git/clone-store.js";
 import { parsePullRequestUrl, PullRequestUrlError } from "./ado/pr-url.js";
 import { buildSteps, ReviewSession, type Hunk } from "./session.js";
 import { buildSymbolGraph } from "./analysis/lsp-graph.js";
@@ -57,6 +58,11 @@ let loadTokens: vscode.CancellationTokenSource | null = null;
 export function activate(context: vscode.ExtensionContext): void {
   extensionUri = context.extensionUri;
   storageUri = context.globalStorageUri;
+  // Reclaim clones left unused for a while, so the cache self-limits. Zero disables it.
+  const pruneDays = vscode.workspace
+    .getConfiguration("prAnalyzer")
+    .get<number>("clonePruneDays", 15);
+  if (pruneDays > 0) void pruneOldClones(storageUri, pruneDays);
   initialiseModelMemory(context.globalState);
   initialiseCheckpoints(context.globalState);
   workspaceState = context.globalState;
@@ -105,6 +111,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("prAnalyzer.showStory", () => void showStory(false)),
     vscode.commands.registerCommand("prAnalyzer.mapIntent", mapIntent),
     vscode.commands.registerCommand("prAnalyzer.addNote", addNote),
+    vscode.commands.registerCommand("prAnalyzer.clearClones", clearClones),
     vscode.window.onDidChangeActiveTextEditor(updateDiffContext),
   );
 
@@ -164,6 +171,25 @@ async function signOutOfAzureDevOps(): Promise<void> {
   await signOut();
   void vscode.window.showInformationMessage(
     "Forgot the stored Azure DevOps token. Your VS Code account sign-in is untouched.",
+  );
+}
+
+/** Removes the cached clones and worktrees kept for pull request review. */
+async function clearClones(): Promise<void> {
+  const choice = await vscode.window.showWarningMessage(
+    "Remove the clones and worktrees PR Analyzer caches for reviewing pull requests? " +
+      "They are re-created on the next review.",
+    { modal: true },
+    "Clear",
+  );
+  if (choice !== "Clear") return;
+
+  await discardWorktree();
+  const removed = await clearAllClones(storageUri);
+  void vscode.window.showInformationMessage(
+    removed > 0
+      ? `Cleared ${removed} cached clone${removed === 1 ? "" : "s"}.`
+      : "No cached clones to clear.",
   );
 }
 
