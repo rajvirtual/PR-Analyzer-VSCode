@@ -2,6 +2,15 @@
 
 All notable changes to PR Analyzer are recorded here.
 
+## [0.3.0] - 2026-09-11
+
+### Added
+- **Select model** — a command (Ctrl+Shift+P → *PR Analyzer: Select model*) to choose which
+  Copilot model runs file ordering, the diagram, the read-through, Explain, and intent mapping.
+- **Model indicator** — a status-bar item names the model in use and opens the picker on click.
+- **First-run prompt** — a one-time nudge to pick a model, so ordering and Explain don't silently
+  use the default.
+
 ## [0.2.0] - 2026-09-11
 
 ### Added

@@ -14,6 +14,7 @@ import { buildSymbolGraph } from "./analysis/lsp-graph.js";
 import { orderFromGraph, type SymbolGraph } from "./analysis/flow-order.js";
 import { hasEdges, textSymbolGraph } from "./analysis/text-graph.js";
 import { orderStepsWithModel } from "./lm/order-steps.js";
+import { pickModel, selectModel } from "./lm/select-model.js";
 import {
   AFTER_SCHEME,
   BEFORE_SCHEME,
@@ -41,6 +42,7 @@ import { initialiseCheckpoints, loadCheckpoint, saveCheckpoint } from "./review/
 let session: ReviewSession | null = null;
 let graph: SymbolGraph = { references: new Map(), referencedBy: new Map(), resolved: false };
 let statusBar: vscode.StatusBarItem;
+let modelBar: vscode.StatusBarItem;
 let tree: StepTreeProvider;
 let treeView: vscode.TreeView<TreeNode>;
 let content: ChangeContentProvider;
@@ -79,9 +81,13 @@ export function activate(context: vscode.ExtensionContext): void {
   inlineExplainer = new InlineExplainer();
   statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   statusBar.command = "prAnalyzer.next";
+  // A second item names the model everything runs on, so the choice is visible and one click away.
+  modelBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 99);
+  modelBar.command = "prAnalyzer.selectModel";
 
   context.subscriptions.push(
     statusBar,
+    modelBar,
     content,
     gitLog,
     gitLog.listen(),
@@ -112,10 +118,17 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("prAnalyzer.mapIntent", mapIntent),
     vscode.commands.registerCommand("prAnalyzer.addNote", addNote),
     vscode.commands.registerCommand("prAnalyzer.clearClones", clearClones),
+    vscode.commands.registerCommand("prAnalyzer.selectModel", () => void pickModel()),
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration("prAnalyzer.model")) void refreshModelIndicator();
+    }),
     vscode.window.onDidChangeActiveTextEditor(updateDiffContext),
   );
 
   registerChatParticipant(context, () => session);
+  void refreshModelIndicator();
+  // On a fresh install, offer the model picker once so ordering/Explain don't silently use the default.
+  void maybePromptForModel(context.globalState);
 }
 
 export function deactivate(): void {
@@ -389,6 +402,8 @@ function setSession(next: ReviewSession | null): void {
   // Naming the source makes it plain which review replaced which.
   treeView.description = next?.changeSet.label;
   void vscode.commands.executeCommand("setContext", "prAnalyzer.active", next !== null);
+  // A review may have settled on a model (e.g. the last @pr pick); keep the indicator honest.
+  void refreshModelIndicator();
   if (!next) {
     content.setChangeSet(null);
     statusBar.hide();
@@ -414,6 +429,47 @@ function updateStatusBar(): void {
       "The diff editor's own arrows stay within this file.",
   );
   statusBar.show();
+}
+
+async function refreshModelIndicator(): Promise<void> {
+  const configured = vscode.workspace
+    .getConfiguration("prAnalyzer")
+    .get<string>("model", "")
+    .trim();
+  // Prefer the model actually resolved for the run; fall back to the setting, then a generic label.
+  let label = configured;
+  try {
+    const model = await selectModel();
+    if (model) label = model.name;
+  } catch {
+    // The model list may not be ready yet at activation; the setting or generic label still helps.
+  }
+  modelBar.text = `$(sparkle) ${label || "Model"}`;
+  modelBar.tooltip = new vscode.MarkdownString(
+    "**PR Analyzer model**\n\n" +
+      "Used for file ordering, the diagram, the read-through, Explain, and intent mapping.\n\n" +
+      "Click to choose a different model.",
+  );
+  modelBar.show();
+}
+
+const MODEL_PROMPT_KEY = "prAnalyzer.modelPromptShown";
+
+async function maybePromptForModel(state: vscode.Memento): Promise<void> {
+  const configured = vscode.workspace
+    .getConfiguration("prAnalyzer")
+    .get<string>("model", "")
+    .trim();
+  // Nudge once, and never after a model has been chosen.
+  if (configured || state.get<boolean>(MODEL_PROMPT_KEY)) return;
+  void state.update(MODEL_PROMPT_KEY, true);
+  const pick = "Pick a model";
+  const choice = await vscode.window.showInformationMessage(
+    "PR Analyzer runs on a Copilot model for file ordering, the map, Explain, and intent. Pick which one to use?",
+    pick,
+    "Not now",
+  );
+  if (choice === pick) await pickModel();
 }
 
 async function openStep(stepId?: string): Promise<void> {

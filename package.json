@@ -186,6 +186,11 @@
         "command": "prAnalyzer.clearClones",
         "title": "Clear cached clones",
         "category": "PR Analyzer"
+      },
+      {
+        "command": "prAnalyzer.selectModel",
+        "title": "Select model",
+        "category": "PR Analyzer"
       }
     ],
     "keybindings": [
