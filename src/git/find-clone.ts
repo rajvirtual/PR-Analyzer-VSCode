@@ -169,25 +169,16 @@ export async function offerToClone(
     return existing;
   }
 
+  // Modal so the choice waits for the reader rather than vanishing as a notification.
   const choice = await vscode.window.showInformationMessage(
-    `${identity.repository} was not found on disk, so only the files this pull request changed can be read.`,
-    { modal: false, detail: `Looked in:\n${searched.join("\n")}` },
+    `${identity.repository} is not cloned locally. Clone it to read the whole repository during ` +
+      `review — a fast blobless clone kept in the extension's storage and reused next time. ` +
+      `Otherwise only the pull request's changed files can be read.`,
+    { modal: true, detail: `Looked in:\n${searched.join("\n")}` },
     "Clone it",
     "Locate it…",
-    "Where did it look?",
     "Continue without",
   );
-
-  if (choice === "Where did it look?") {
-    const channel = vscode.window.createOutputChannel("PR Analyzer");
-    channel.appendLine(`Looking for a clone of ${identity.repository}:`);
-    for (const entry of searched) channel.appendLine(`  ${entry}`);
-    channel.appendLine(
-      "Add the folder holding your clones to prAnalyzer.repositorySearchPaths, or choose Locate it.",
-    );
-    channel.show();
-    return null;
-  }
 
   if (choice === "Locate it…") return locateClone(identity);
   if (choice !== "Clone it") return null;
