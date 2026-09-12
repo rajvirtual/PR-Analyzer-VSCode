@@ -5,11 +5,10 @@ All notable changes to PR Analyzer are recorded here.
 ## [0.5.0] - 2026-09-12
 
 ### Added
-- **Faster structure model** — ordering the files and drawing the diagram now run on a separate,
-  faster model (`prAnalyzer.structureModel`). Empty picks the fastest small model Copilot offers by
-  name, falling back to the main model, so nothing is hard-coded. The main model still does the
-  read-through, Explain, and intent. A **Select structure model** command and the diagram's Model
-  button choose it.
+- **Optional faster structure model** — set `prAnalyzer.structureModel` to run ordering and the
+  diagram on a faster model than the read-through and Explain. Empty (the default) uses your main
+  model for everything, so the diagram keeps its quality. A **Select structure model** command and
+  the diagram's Model button choose the override.
 - **Cached diagram** — a drawn map is cached per commit, so reopening a review you have already
   mapped is instant. Redraw always draws fresh.
 
@@ -18,6 +17,8 @@ All notable changes to PR Analyzer are recorded here.
   read-through time.
 
 ### Fixed
+- The diagram retries once automatically when the model returns nothing on the first call
+  (common with a fast structure model), instead of needing a manual Redraw.
 - A diagram whose model-generated mermaid fails to parse no longer leaves a "Syntax error in
   text" graphic on screen. Each failed render is cleaned up and the plain file map is shown
   instead, and a parse error is no longer retried, so the message can't appear twice.

@@ -460,8 +460,7 @@ async function refreshModelIndicator(): Promise<void> {
   modelBar.text = `$(sparkle) ${label || "Model"}`;
   modelBar.tooltip = new vscode.MarkdownString(
     "**PR Analyzer model**\n\n" +
-      "Used for the read-through, Explain, and intent. Ordering and the diagram use the\n" +
-      "structure model instead.\n\n" +
+      "Used for the diagram, the read-through, Explain, and intent.\n\n" +
       "Click to choose a different model.",
   );
   modelBar.show();

@@ -104,9 +104,9 @@ command ─▶ change source ─▶ ChangeSet
   (`analysis/test-impact.ts`).
 
 ### Change-complexity colour coding
-- The ordering model rates each file `routine` / `involved` / `complex`; `session.ts`'s
-  `clampEffort` corrects ratings the change size contradicts (a tiny change is never complex; a
-  very large one is never routine).
+- The ordering pass (on the structure model — the main model unless overridden) rates each file
+  `routine` / `involved` / `complex`; `session.ts`'s `clampEffort` corrects ratings the change size
+  contradicts (a tiny change is never complex; a very large one is never routine).
 - `ui/files-tree.ts` colours the icon — **red** complex, **green** routine, neutral involved — with
   a text tag and tooltip, so the meaning is never carried by colour alone.
 
@@ -165,11 +165,11 @@ Two roles, each resolved independently and never hard-coded to a specific model:
 | **Structure** | `selectStructureModel()` | `prAnalyzer.structureModel` | ordering, diagram |
 | Chat | (chat picker) | — | `@pr` |
 
-`selectStructureModel()` resolves the setting if present, else picks the **fastest-looking
-available** model by a vendor-agnostic name heuristic (`mini`, `haiku`, `flash`, `lite`, …), else
-falls back to the reasoning model — so it speeds up when a small model exists and never breaks when
-one does not. A status-bar item shows the reasoning model; `Select model` and `Select structure
-model` (and the diagram's Model button) change them.
+`selectStructureModel()` uses `prAnalyzer.structureModel` if set, and otherwise **the reasoning
+model** — so by default ordering and the diagram run on the model you selected, and the diagram
+keeps its quality. Setting `structureModel` to a lighter model is an opt-in speed override. A
+status-bar item shows the reasoning model; `Select model`, `Select structure model`, and the
+diagram's Model button change them.
 
 ### The tool loop (`lm/run-with-tools.ts`, `repo-tools.ts`)
 The diagram, read-through, Explain, and intent all run through one bounded loop: the model streams

@@ -39,36 +39,44 @@ export async function drawDiagram(input: {
   }
 
   input.onModel?.(model.name);
-  input.onProgress?.(`Drawing with ${model.name}…`);
 
-  try {
-    const result = await runWithTools({
-      model,
-      context: { repositoryRoot: input.repositoryRoot, files: input.files },
-      prompt: `${DIAGRAM_SYSTEM_PROMPT}\n\n${buildDiagramPrompt(input.steps, input.files, input.graph)}`,
-      onProgress: input.onProgress,
-      token: input.token,
-    });
+  // A fast structure model sometimes returns nothing on the first call; one automatic retry
+  // saves the reader a manual Redraw before we fall back.
+  const attempt = async (phase: string): Promise<DrawOutcome> => {
+    input.onProgress?.(`${phase} with ${model.name}…`);
+    try {
+      const result = await runWithTools({
+        model,
+        context: { repositoryRoot: input.repositoryRoot, files: input.files },
+        prompt: `${DIAGRAM_SYSTEM_PROMPT}\n\n${buildDiagramPrompt(input.steps, input.files, input.graph)}`,
+        onProgress: input.onProgress,
+        token: input.token,
+      });
 
-    const diagram = validateDiagram(parseFirstJson(result.text), input.files);
-    if (diagram) {
-      // The prompt asks for numbers that ascend along the arrows and does not always
-      // get them; the arrows lay the diagram out, so they decide the numbering.
-      const { mermaid, corrected } = renumberByFlow(diagram.mermaid);
-      if (corrected > 0) input.onProgress?.(`Renumbered ${corrected} steps to follow the arrows`);
-      return { diagram: { ...diagram, mermaid } };
+      const diagram = validateDiagram(parseFirstJson(result.text), input.files);
+      if (diagram) {
+        // The prompt asks for numbers that ascend along the arrows and does not always
+        // get them; the arrows lay the diagram out, so they decide the numbering.
+        const { mermaid, corrected } = renumberByFlow(diagram.mermaid);
+        if (corrected > 0) input.onProgress?.(`Renumbered ${corrected} steps to follow the arrows`);
+        return { diagram: { ...diagram, mermaid } };
+      }
+
+      return {
+        diagram: null,
+        reason: result.text.trim()
+          ? `${model.name} did not return a usable diagram. It replied: ${result.text.trim().slice(0, 200)}`
+          : `${model.name} returned nothing.`,
+      };
+    } catch (error) {
+      return {
+        diagram: null,
+        reason: `${model.name} failed: ${error instanceof Error ? error.message : String(error)}`,
+      };
     }
+  };
 
-    return {
-      diagram: null,
-      reason: result.text.trim()
-        ? `${model.name} did not return a usable diagram. It replied: ${result.text.trim().slice(0, 200)}`
-        : `${model.name} returned nothing.`,
-    };
-  } catch (error) {
-    return {
-      diagram: null,
-      reason: `${model.name} failed: ${error instanceof Error ? error.message : String(error)}`,
-    };
-  }
+  const first = await attempt("Drawing");
+  if (first.diagram || input.token.isCancellationRequested) return first;
+  return attempt("Retrying");
 }

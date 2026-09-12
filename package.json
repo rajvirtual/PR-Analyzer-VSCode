@@ -2,7 +2,7 @@
   "name": "pr-analyzer",
   "displayName": "PR Analyzer — review a pull request or branch",
   "description": "Walk a large change in execution order: ordered steps, native diffs, and a map of how the files connect",
-  "version": "0.5.0",
+  "version": "0.4.2",
   "publisher": "rajeshvijay",
   "private": true,
   "license": "MIT",
@@ -191,6 +191,11 @@
         "command": "prAnalyzer.selectModel",
         "title": "Select model",
         "category": "PR Analyzer"
+      },
+      {
+        "command": "prAnalyzer.selectStructureModel",
+        "title": "Select structure model",
+        "category": "PR Analyzer"
       }
     ],
     "keybindings": [
@@ -331,7 +336,12 @@
         "prAnalyzer.model": {
           "type": "string",
           "default": "",
-          "description": "Model used for ordering and the diagram, by id, family, or part of its name, for example 'claude-opus-5'. Empty uses whichever model Copilot offers first. The @pr chat uses the model chosen in the chat picker instead."
+          "description": "Model used for the diagram, the read-through, Explain, and intent mapping, by id, family, or part of its name, for example 'claude-opus-5'. Empty uses whichever model Copilot offers first. The @pr chat uses the model chosen in the chat picker instead."
+        },
+        "prAnalyzer.structureModel": {
+          "type": "string",
+          "default": "",
+          "description": "Optional model for ordering the files and drawing the diagram. Empty uses the main model (prAnalyzer.model); set a faster model to speed these up at some cost to accuracy."
         },
         "prAnalyzer.repositorySearchPaths": {
           "type": "array",
