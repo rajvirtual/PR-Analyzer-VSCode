@@ -164,6 +164,8 @@ function dirOf(path: string): string {
 function effortColor(effort?: Effort): vscode.ThemeColor | undefined {
   if (effort === "complex") return new vscode.ThemeColor("charts.red");
   if (effort === "routine") return new vscode.ThemeColor("charts.green");
+  // Ordinary logic gets a plain icon, so the symbol's own colour can't read as a category.
+  if (effort === "involved") return new vscode.ThemeColor("icon.foreground");
   return undefined;
 }
 

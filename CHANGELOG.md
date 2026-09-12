@@ -2,6 +2,12 @@
 
 All notable changes to PR Analyzer are recorded here.
 
+## [0.4.1] - 2026-09-12
+
+### Fixed
+- Files rated "involved" (ordinary logic) now get a neutral icon instead of the symbol's own
+  colour, so only the red (complex) and green (routine) icons carry meaning in the Files list.
+
 ## [0.4.0] - 2026-09-11
 
 ### Added
