@@ -2,7 +2,7 @@
   "name": "pr-analyzer",
   "displayName": "PR Analyzer — review a pull request or branch",
   "description": "Walk a large change in execution order: ordered steps, native diffs, and a map of how the files connect",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "publisher": "rajeshvijay",
   "private": true,
   "license": "MIT",
