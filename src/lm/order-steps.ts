@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import type { ChangedFile } from "../model/changeset.js";
 import type { SymbolGraph } from "../analysis/flow-order.js";
 import { parseFirstJson } from "./json.js";
-import { selectModel } from "./select-model.js";
+import { selectStructureModel } from "./select-model.js";
 import {
   buildOrderPrompt,
   ORDER_SYSTEM_PROMPT,
@@ -42,7 +42,7 @@ export async function orderStepsWithModel(input: {
 }): Promise<OrderOutcome> {
   const { files, graph, fallbackOrder, token } = input;
 
-  const model = await selectModel();
+  const model = await selectStructureModel();
   if (!model) {
     return {
       steps: reconcileOrder(files, [], fallbackOrder),

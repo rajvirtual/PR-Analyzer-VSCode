@@ -4,7 +4,7 @@ import type { SymbolGraph } from "../analysis/flow-order.js";
 import { buildMermaid, stepIdForNode, type Direction } from "../analysis/mermaid.js";
 import { drawDiagram } from "../lm/draw-diagram.js";
 import { beginExclusiveModelWork, clearExclusiveModelWork } from "../lm/model-gate.js";
-import { pickModel } from "../lm/select-model.js";
+import { pickStructureModel } from "../lm/select-model.js";
 import type { DrawnDiagram } from "../lm/diagram-prompt.js";
 
 type View = "change" | "files";
@@ -16,6 +16,11 @@ type View = "change" | "files";
  * from the reference graph. The first is what a reader wants; the second is what can
  * always be produced without asking anything.
  */
+export interface DiagramCache {
+  load(): DrawnDiagram | undefined;
+  save(diagram: DrawnDiagram): void;
+}
+
 export class DiagramPanel {
   private static current: DiagramPanel | undefined;
 
@@ -36,7 +41,9 @@ export class DiagramPanel {
     private graph: SymbolGraph,
     private repositoryRoot: string,
     private readonly onSelect: (stepId: string) => void,
+    private readonly cache: DiagramCache,
   ) {
+    this.drawn = this.cache.load() ?? null;
     this.panel = vscode.window.createWebviewPanel(
       "prAnalyzer.diagram",
       "PR Analyzer: map",
@@ -54,7 +61,13 @@ export class DiagramPanel {
       this.onMessage(message),
     );
     this.panel.onDidDispose(() => {
+      // A closed map has nothing to draw for; stop any model call still running.
+      this.drawTokens?.cancel();
       DiagramPanel.current = undefined;
+    });
+    this.panel.onDidChangeViewState((event) => {
+      // No point spending a model call on a map the reader has tabbed away from.
+      if (!event.webviewPanel.visible) this.drawTokens?.cancel();
     });
   }
 
@@ -65,6 +78,7 @@ export class DiagramPanel {
     graph: SymbolGraph,
     repositoryRoot: string,
     onSelect: (stepId: string) => void,
+    cache: DiagramCache,
   ): DiagramPanel {
     if (DiagramPanel.current) {
       DiagramPanel.current.update(steps, files, graph, repositoryRoot);
@@ -78,6 +92,7 @@ export class DiagramPanel {
       graph,
       repositoryRoot,
       onSelect,
+      cache,
     );
     return DiagramPanel.current;
   }
@@ -102,7 +117,7 @@ export class DiagramPanel {
     this.files = files;
     this.graph = graph;
     this.repositoryRoot = repositoryRoot;
-    this.drawn = null;
+    this.drawn = this.cache.load() ?? null;
     this.drawGeneration += 1;
     void this.push();
   }
@@ -118,14 +133,17 @@ export class DiagramPanel {
         void this.push();
         return;
       case "redraw":
+        // Stop a draw already in flight so the new one starts now, not after it finishes.
+        this.drawTokens?.cancel();
         this.drawn = null;
         this.drawGeneration += 1;
         this.view = "change";
         void this.push();
         return;
       case "pickModel":
-        void pickModel().then((chosen) => {
+        void pickStructureModel().then((chosen) => {
           if (chosen === undefined) return;
+          this.drawTokens?.cancel();
           this.drawn = null;
           this.drawGeneration += 1;
           this.view = "change";
@@ -237,6 +255,9 @@ export class DiagramPanel {
         void this.push();
         return;
       }
+
+      // A successful draw is cached per commit, so reopening the map is instant.
+      this.cache.save(this.drawn);
     }
 
     if (this.drawn) {

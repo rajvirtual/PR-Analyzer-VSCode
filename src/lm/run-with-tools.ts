@@ -76,14 +76,18 @@ export async function runWithTools(input: {
 
     messages.push(vscode.LanguageModelChatMessage.Assistant(calls));
 
+    // The lookups are read-only, so a round that asks for several is serviced in parallel.
+    const serviced = await Promise.all(
+      calls.map((call) => invokeRepoTool(context, call.name, call.input)),
+    );
     const results: vscode.LanguageModelToolResultPart[] = [];
-    for (const call of calls) {
+    for (let index = 0; index < calls.length; index += 1) {
       toolCalls += 1;
-      const result = await invokeRepoTool(context, call.name, call.input);
+      const result = serviced[index]!;
       consulted = mergeConsulted(consulted, result.consulted);
       report(result.label);
       results.push(
-        new vscode.LanguageModelToolResultPart(call.callId, [
+        new vscode.LanguageModelToolResultPart(calls[index]!.callId, [
           new vscode.LanguageModelTextPart(result.text),
         ]),
       );

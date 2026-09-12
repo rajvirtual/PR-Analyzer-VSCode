@@ -4,7 +4,7 @@ import type { SymbolGraph } from "../analysis/flow-order.js";
 import { renumberByFlow } from "../analysis/renumber.js";
 import { parseFirstJson } from "./json.js";
 import { runWithTools } from "./run-with-tools.js";
-import { selectModel } from "./select-model.js";
+import { selectStructureModel } from "./select-model.js";
 import {
   buildDiagramPrompt,
   DIAGRAM_SYSTEM_PROMPT,
@@ -33,7 +33,7 @@ export async function drawDiagram(input: {
   onModel?: (name: string) => void;
   token: vscode.CancellationToken;
 }): Promise<DrawOutcome> {
-  const model = await selectModel();
+  const model = await selectStructureModel();
   if (!model) {
     return { diagram: null, reason: "No Copilot model is available." };
   }

@@ -1,5 +1,6 @@
 import type * as vscode from "vscode";
 import type { ChangeSet } from "../model/changeset.js";
+import type { DrawnDiagram } from "../lm/diagram-prompt.js";
 
 /**
  * Where a reader had reached in a review, kept so reopening the same change resumes
@@ -34,4 +35,20 @@ export function saveCheckpoint(changeSet: ChangeSet, checkpoint: Checkpoint): vo
 
 export function loadCheckpoint(changeSet: ChangeSet): Checkpoint | undefined {
   return store?.get<Checkpoint>(checkpointKey(changeSet));
+}
+
+const DIAGRAM_PREFIX = "prAnalyzer.diagram.";
+
+function diagramKey(changeSet: ChangeSet): string {
+  const commit = changeSet.headCommit ?? changeSet.mergeBase;
+  return `${DIAGRAM_PREFIX}${changeSet.repositoryRoot}@${commit}`;
+}
+
+/** Caches the drawn diagram for a commit, so reopening the map is instant. */
+export function saveDiagram(changeSet: ChangeSet, diagram: DrawnDiagram): void {
+  void store?.update(diagramKey(changeSet), diagram);
+}
+
+export function loadDiagram(changeSet: ChangeSet): DrawnDiagram | undefined {
+  return store?.get<DrawnDiagram>(diagramKey(changeSet));
 }

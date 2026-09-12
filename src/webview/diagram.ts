@@ -256,22 +256,34 @@ function centreOn(element: Element): void {
 
 let renderSeq = 0;
 
+/** Mermaid's parse errors say so; retrying one only wastes a call and leaks a second graphic. */
+function isSyntaxError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /syntax error|parse error|no diagram type/i.test(message);
+}
+
 /**
- * The ELK layout module loads on first use, and mermaid's very first render can lose that
- * race and throw. One retry after a tick lets the loader settle, so the diagram appears
- * with its colours on first open instead of needing a manual redraw.
+ * Renders the diagram, cleaning up after a failure.
+ *
+ * The ELK layout module loads on first use, so mermaid's first render can lose that race and
+ * throw; one retry after a tick lets it settle. Mermaid also leaves an error graphic in the
+ * DOM when it fails, so each failed attempt's node is removed before the caller falls back.
  */
 async function draw(definition: string): Promise<string> {
-  try {
-    return (await mermaid.render(`diagram-${(renderSeq += 1)}`, definition)).svg;
-  } catch (first) {
-    await new Promise((resolve) => setTimeout(resolve, 50));
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const id = `diagram-${(renderSeq += 1)}`;
     try {
-      return (await mermaid.render(`diagram-${(renderSeq += 1)}`, definition)).svg;
-    } catch {
-      throw first;
+      return (await mermaid.render(id, definition)).svg;
+    } catch (error) {
+      lastError = error;
+      document.getElementById(id)?.remove();
+      document.getElementById(`d${id}`)?.remove();
+      if (attempt === 1 || isSyntaxError(error)) break;
+      await new Promise((resolve) => setTimeout(resolve, 50));
     }
   }
+  throw lastError;
 }
 
 async function render(definition: string): Promise<void> {

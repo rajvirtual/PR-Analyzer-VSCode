@@ -14,7 +14,7 @@ import { buildSymbolGraph } from "./analysis/lsp-graph.js";
 import { orderFromGraph, type SymbolGraph } from "./analysis/flow-order.js";
 import { hasEdges, textSymbolGraph } from "./analysis/text-graph.js";
 import { orderStepsWithModel } from "./lm/order-steps.js";
-import { pickModel, selectModel } from "./lm/select-model.js";
+import { pickModel, pickStructureModel, selectModel } from "./lm/select-model.js";
 import {
   beginExclusiveModelWork,
   clearExclusiveModelWork,
@@ -42,7 +42,13 @@ import { DiagramPanel } from "./ui/diagram-panel.js";
 import { registerChatParticipant } from "./chat/participant.js";
 import { initialiseModelMemory } from "./lm/model-memory.js";
 import { Generation } from "./review/generation.js";
-import { initialiseCheckpoints, loadCheckpoint, saveCheckpoint } from "./review/checkpoint.js";
+import {
+  initialiseCheckpoints,
+  loadCheckpoint,
+  loadDiagram,
+  saveCheckpoint,
+  saveDiagram,
+} from "./review/checkpoint.js";
 
 let session: ReviewSession | null = null;
 let graph: SymbolGraph = { references: new Map(), referencedBy: new Map(), resolved: false };
@@ -124,6 +130,10 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("prAnalyzer.addNote", addNote),
     vscode.commands.registerCommand("prAnalyzer.clearClones", clearClones),
     vscode.commands.registerCommand("prAnalyzer.selectModel", () => void pickModel()),
+    vscode.commands.registerCommand(
+      "prAnalyzer.selectStructureModel",
+      () => void pickStructureModel(),
+    ),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("prAnalyzer.model")) void refreshModelIndicator();
     }),
@@ -450,7 +460,8 @@ async function refreshModelIndicator(): Promise<void> {
   modelBar.text = `$(sparkle) ${label || "Model"}`;
   modelBar.tooltip = new vscode.MarkdownString(
     "**PR Analyzer model**\n\n" +
-      "Used for file ordering, the diagram, the read-through, Explain, and intent mapping.\n\n" +
+      "Used for the read-through, Explain, and intent. Ordering and the diagram use the\n" +
+      "structure model instead.\n\n" +
       "Click to choose a different model.",
   );
   modelBar.show();
@@ -582,6 +593,12 @@ function showDiagram(): void {
     graph,
     session.changeSet.repositoryRoot,
     (stepId) => void openStep(stepId),
+    {
+      load: () => (session ? loadDiagram(session.changeSet) : undefined),
+      save: (diagram) => {
+        if (session) saveDiagram(session.changeSet, diagram);
+      },
+    },
   );
   DiagramPanel.highlight(session.currentStep?.id ?? null);
 }
