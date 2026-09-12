@@ -2,13 +2,22 @@
 
 All notable changes to PR Analyzer are recorded here.
 
+## [0.5.1] - 2026-09-12
+
+### Changed
+- Ordering and the diagram default to your selected model (`prAnalyzer.model`) again, so the
+  diagram keeps its quality. `prAnalyzer.structureModel` is now an opt-in override for a faster
+  model rather than the default.
+
+### Fixed
+- The diagram retries once automatically when the model returns nothing on the first call,
+  instead of needing a manual Redraw.
+
 ## [0.5.0] - 2026-09-12
 
 ### Added
-- **Optional faster structure model** — set `prAnalyzer.structureModel` to run ordering and the
-  diagram on a faster model than the read-through and Explain. Empty (the default) uses your main
-  model for everything, so the diagram keeps its quality. A **Select structure model** command and
-  the diagram's Model button choose the override.
+- **Structure model** — a separate `prAnalyzer.structureModel` for ordering and the diagram, with
+  a **Select structure model** command and the diagram's Model button to choose it.
 - **Cached diagram** — a drawn map is cached per commit, so reopening a review you have already
   mapped is instant. Redraw always draws fresh.
 
@@ -17,8 +26,6 @@ All notable changes to PR Analyzer are recorded here.
   read-through time.
 
 ### Fixed
-- The diagram retries once automatically when the model returns nothing on the first call
-  (common with a fast structure model), instead of needing a manual Redraw.
 - A diagram whose model-generated mermaid fails to parse no longer leaves a "Syntax error in
   text" graphic on screen. Each failed render is cleaned up and the plain file map is shown
   instead, and a parse error is no longer retried, so the message can't appear twice.
