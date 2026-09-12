@@ -2,6 +2,14 @@
 
 All notable changes to PR Analyzer are recorded here.
 
+## [0.4.2] - 2026-09-12
+
+### Changed
+- The change-complexity rating is more accurate. The model is told to weigh each file's
+  +added/-removed counts and to default to "involved", and a deterministic guardrail then
+  corrects ratings the change size contradicts — a change of only a handful of lines is never
+  marked complex, and a very large change is never left as routine.
+
 ## [0.4.1] - 2026-09-12
 
 ### Fixed

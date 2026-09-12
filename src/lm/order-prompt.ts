@@ -41,13 +41,16 @@ You are given two things about each file:
   flow goes; the graph only tells you what is wired to what.
 When the two disagree, believe the code.
 
-For each file, also rate how much careful review its change needs, as "effort":
+For each file, also rate how much careful review its change needs, as "effort". Weigh both what
+changed (the declarations and "logic:" lines in the digest) and how much (the +added/-removed
+counts in each file's header). Default to "involved" and move off it only with evidence.
 - "routine": mechanical or low-risk. A rename, a moved file, a data model or DTO, config,
-  generated code, or a test that mirrors the change.
-- "involved": ordinary logic worth reading, but holding no traps.
-- "complex": dense or subtle logic where a mistake would hide. New control flow, concurrency,
-  intricate conditionals, error handling, or anything touching security or money. Reserve it
-  for the few files that truly earn it.
+  generated code, or a test that mirrors the change. A change of only a few lines is usually here.
+- "involved": ordinary logic worth reading, but holding no traps. This is the default.
+- "complex": dense or subtle logic where a mistake would hide — new control flow, concurrency,
+  intricate conditionals, error handling, or anything touching security or money. It has to show
+  in the rewritten logic, not merely in a file's size. Reserve it for the few files that earn it;
+  a change of under about five lines is never complex.
 
 Reply with a single JSON object and nothing else. No prose, no code fences:
 {"steps":[{"path":"<exact path from the list>","title":"<what happens here, under 10 words>","effort":"routine|involved|complex"}]}

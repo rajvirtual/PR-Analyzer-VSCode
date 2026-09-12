@@ -22,6 +22,40 @@ function changeSet(files: ChangedFile[]): ChangeSet {
   };
 }
 
+describe("buildSteps effort", () => {
+  it("demotes a complex rating on a tiny change to involved", () => {
+    const steps = buildSteps(changeSet([file("x.ts", "a\nb\nc", "a\nB\nc")]), [
+      { path: "x.ts", title: "t", effort: "complex" },
+    ]);
+    expect(steps[0]?.effort).toBe("involved");
+  });
+
+  it("keeps a complex rating when the change is substantial", () => {
+    const before = Array.from({ length: 20 }, (_, i) => `line ${i}`).join("\n");
+    const after = Array.from({ length: 20 }, (_, i) => `LINE ${i} changed`).join("\n");
+    const steps = buildSteps(changeSet([file("x.ts", before, after)]), [
+      { path: "x.ts", title: "t", effort: "complex" },
+    ]);
+    expect(steps[0]?.effort).toBe("complex");
+  });
+
+  it("promotes a routine rating on a large change to involved", () => {
+    const before = Array.from({ length: 200 }, (_, i) => `a ${i}`).join("\n");
+    const after = Array.from({ length: 200 }, (_, i) => `b ${i}`).join("\n");
+    const steps = buildSteps(changeSet([file("Models.cs", before, after)]), [
+      { path: "Models.cs", title: "t", effort: "routine" },
+    ]);
+    expect(steps[0]?.effort).toBe("involved");
+  });
+
+  it("leaves a small routine change alone", () => {
+    const steps = buildSteps(changeSet([file("Dto.cs", "a\nb", "a\nB")]), [
+      { path: "Dto.cs", title: "t", effort: "routine" },
+    ]);
+    expect(steps[0]?.effort).toBe("routine");
+  });
+});
+
 describe("hunksOf", () => {
   it("groups adjacent changed lines into one hunk", () => {
     const before = "a\nb\nc\nd\ne";

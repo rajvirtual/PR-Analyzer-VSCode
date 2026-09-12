@@ -64,8 +64,30 @@ export function buildSteps(
       file: pair.file,
       role: roleByPath.get(pair.file.path) ?? "other",
       title: pair.entry.title || undefined,
-      effort: pair.entry.effort,
+      effort: clampEffort(pair.entry.effort, churnOf(pair.file)),
     }));
+}
+
+// A complex rating needs enough changed lines to hide something; below this it is at most involved.
+const COMPLEX_MIN_CHURN = 8;
+// A routine rating stops being credible once a change is this large.
+const ROUTINE_MAX_CHURN = 150;
+
+/** Corrects a rating the change size plainly contradicts, leaving the rest to the model. */
+export function clampEffort(effort: Effort | undefined, churn: number): Effort | undefined {
+  if (effort === "complex" && churn < COMPLEX_MIN_CHURN) return "involved";
+  if (effort === "routine" && churn >= ROUTINE_MAX_CHURN) return "involved";
+  return effort;
+}
+
+function churnOf(file: ChangedFile): number {
+  const before = (file.before ?? "").split("\n");
+  const after = (file.after ?? "").split("\n");
+  let churn = 0;
+  for (const line of diffLines(before, after)) {
+    if (line.kind !== "context") churn += 1;
+  }
+  return churn;
 }
 
 /**
