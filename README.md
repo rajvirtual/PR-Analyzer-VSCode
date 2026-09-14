@@ -232,14 +232,25 @@ first.
 
 ## Installing it
 
-The extension is not on the Marketplace. It ships as a `.vsix` file, which installs in one
-command and uses each person's own Copilot sign-in — there is nothing else to set up.
+It uses your own GitHub Copilot sign-in — there is nothing else to set up.
 
-**From a build.** Every push to `main` publishes `pr-analyzer-vsix` as a build artifact.
-Download it and run:
+**From the Marketplace.** Search **AI PR Analyzer** in the Extensions view, or open
+[the listing](https://marketplace.visualstudio.com/items?itemName=rajeshvijay.pr-analyzer) and
+press Install. From a terminal:
 
 ```bash
-code --install-extension pr-analyzer-0.2.0.vsix
+code --install-extension rajeshvijay.pr-analyzer
+```
+
+A freshly published version can take a while to surface in search; typing
+`@id:rajeshvijay.pr-analyzer` in the Extensions box finds it straight away. Marketplace
+installs update themselves.
+
+**From a build.** Every push to `main` publishes `pr-analyzer-vsix` as a build artifact, and
+each release tag attaches the same `.vsix`. Download it and run:
+
+```bash
+code --install-extension pr-analyzer-<version>.vsix
 ```
 
 **From source.**
@@ -248,14 +259,15 @@ code --install-extension pr-analyzer-0.2.0.vsix
 cd PR-Analyzer-VSCode
 npm ci
 npm run package        # writes dist/pr-analyzer-<version>.vsix
-code --install-extension dist/pr-analyzer-0.2.0.vsix
+code --install-extension dist/pr-analyzer-<version>.vsix
 ```
 
 Then reload VS Code. Working over Remote-SSH or WSL? Install it in the remote, since that
 is where `git` and the repository live.
 
-Sideloaded extensions do not auto-update, so bump `version` in `package.json` when you
-publish a build worth taking, and tell people to reinstall.
+A sideloaded `.vsix` does not auto-update, so bump `version` in `package.json` when you
+publish a build worth taking, and tell people to reinstall — or install from the Marketplace,
+which updates itself.
 
 ## License
 
