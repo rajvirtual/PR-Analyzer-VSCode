@@ -10,6 +10,24 @@ start reading it.
 Built for reviewing AI-written changes, where the volume is high and the reviewer has no
 memory of writing any of it.
 
+## What it looks like
+
+Both samples below are a made-up *"submit an order"* change — no real code — just to show the
+shape of what you get.
+
+**The map.** Each box is a step in the flow, numbered in reading order and marked **new**,
+**changed**, or left plain when untouched, so you can see exactly where a branch reached. In the
+extension the boxes are clickable and open the file behind them:
+
+![Sample map: a made-up order-submission change drawn as a numbered flow — new steps in green, the changed step in amber, untouched steps left plain](media/sample-map.png)
+
+Green is new, amber is changed, plain is untouched.
+
+**The read-through.** The book icon narrates the same change end to end, in the order it runs, with
+the values moving through it, and ends on what an operator would see before and after:
+
+![Sample read-through: a narrated account of the order-submission change — a summary, then each step in run order with the values flowing through it and new and changed tags, ending on a before-and-after for an operator](media/sample-readthrough.png)
+
 ## What it does
 
 **Orders the change as a flow.** Files are placed in the order execution reaches them,
