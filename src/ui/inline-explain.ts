@@ -45,6 +45,8 @@ export class InlineExplainer {
     thread.comments = [comment(`Reading the change… _(${model.name})_`)];
 
     try {
+      let draft = "";
+      let shownAt = 0;
       const result = await runWithTools({
         model,
         context: {
@@ -53,6 +55,17 @@ export class InlineExplainer {
         },
         // runWithTools supplies the explain rules; sending them again only pays twice.
         prompt: buildExplainPrompt({ changeSet: session.changeSet, file, hunk }),
+        // Show the lookups, then the answer as it is written, so a slow explain is never blank.
+        onProgress: (label) => {
+          if (!draft) thread.comments = [comment(`${label}… _(${model.name})_`)];
+        },
+        onText: (delta) => {
+          draft += delta;
+          if (draft.length - shownAt >= 80) {
+            shownAt = draft.length;
+            thread.comments = [comment(draft)];
+          }
+        },
         token,
       });
 

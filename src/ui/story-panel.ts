@@ -13,6 +13,7 @@ export class StoryPanel {
 
   private readonly panel: vscode.WebviewPanel;
   private disposed = false;
+  private generating = false;
   private handlers: {
     open: (path: string) => void;
     regenerate: () => void;
@@ -48,6 +49,22 @@ export class StoryPanel {
       StoryPanel.current = undefined;
     });
 
+    this.panel.onDidChangeViewState((event) => {
+      // A read-through the reader has tabbed away from is not worth finishing; stop it and
+      // say so plainly, so a half-written one is never mistaken for the whole thing.
+      if (event.webviewPanel.visible || !this.generating || this.disposed) return;
+      this.generating = false;
+      this.handlers.cancel();
+      void vscode.window
+        .showWarningMessage(
+          "PR Analyzer: the read-through was cancelled when you switched away.",
+          "Run again",
+        )
+        .then((choice) => {
+          if (choice === "Run again") this.handlers.regenerate();
+        });
+    });
+
     // Written once. Everything after this is a message, so the reader's scroll survives.
     this.panel.webview.html = shell();
   }
@@ -70,14 +87,17 @@ export class StoryPanel {
   }
 
   busy(message: string, model: string): void {
+    this.generating = true;
     this.post({ type: "busy", message, model });
   }
 
   failed(reason: string): void {
+    this.generating = false;
     this.post({ type: "failed", reason });
   }
 
   show(story: Story, model: string): void {
+    this.generating = false;
     this.post({ type: "story", html: body(story), model });
   }
 

@@ -45,11 +45,24 @@ export async function drawDiagram(input: {
   const attempt = async (phase: string): Promise<DrawOutcome> => {
     input.onProgress?.(`${phase} with ${model.name}…`);
     try {
+      let writingChars = 0;
+      let shownAt = 0;
       const result = await runWithTools({
         model,
         context: { repositoryRoot: input.repositoryRoot, files: input.files },
         prompt: `${DIAGRAM_SYSTEM_PROMPT}\n\n${buildDiagramPrompt(input.steps, input.files, input.graph)}`,
-        onProgress: input.onProgress,
+        onProgress: (label) => {
+          writingChars = 0;
+          shownAt = 0;
+          input.onProgress?.(label);
+        },
+        onText: (delta) => {
+          writingChars += delta.length;
+          if (writingChars >= 40 && writingChars - shownAt >= 200) {
+            shownAt = writingChars;
+            input.onProgress?.(`Drawing the map… (${writingChars.toLocaleString()} characters)`);
+          }
+        },
         token: input.token,
       });
 

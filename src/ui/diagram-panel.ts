@@ -33,6 +33,7 @@ export class DiagramPanel {
   private drawGeneration = 0;
   private drawTokens: vscode.CancellationTokenSource | null = null;
   private ready = false;
+  private disposed = false;
 
   private constructor(
     private readonly extensionUri: vscode.Uri,
@@ -61,13 +62,30 @@ export class DiagramPanel {
       this.onMessage(message),
     );
     this.panel.onDidDispose(() => {
+      this.disposed = true;
       // A closed map has nothing to draw for; stop any model call still running.
       this.drawTokens?.cancel();
       DiagramPanel.current = undefined;
     });
     this.panel.onDidChangeViewState((event) => {
-      // No point spending a model call on a map the reader has tabbed away from.
-      if (!event.webviewPanel.visible) this.drawTokens?.cancel();
+      // No point spending a model call on a map the reader has tabbed away from; say so
+      // plainly rather than leaving a half-drawn map that looks like the finished one.
+      if (event.webviewPanel.visible || !this.drawing || this.disposed) return;
+      this.drawTokens?.cancel();
+      void vscode.window
+        .showWarningMessage(
+          "PR Analyzer: drawing the map was cancelled when you switched away.",
+          "Draw again",
+        )
+        .then((choice) => {
+          if (choice !== "Draw again") return;
+          this.panel.reveal();
+          this.drawTokens?.cancel();
+          this.drawn = null;
+          this.drawGeneration += 1;
+          this.view = "change";
+          void this.push();
+        });
     });
   }
 

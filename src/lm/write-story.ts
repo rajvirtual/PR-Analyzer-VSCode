@@ -16,6 +16,7 @@ export async function writeStory(input: {
   files: ChangedFile[];
   repositoryRoot: string;
   onProgress?: (message: string) => void;
+  onText?: (delta: string) => void;
   onModel?: (name: string) => void;
   token: vscode.CancellationToken;
 }): Promise<StoryOutcome> {
@@ -30,6 +31,10 @@ export async function writeStory(input: {
       system: STORY_SYSTEM_PROMPT,
       prompt: buildStoryPrompt(input.steps, input.files),
       onProgress: input.onProgress,
+      onText: input.onText,
+      // The read-through spans every step, so it needs more headroom than a single explain.
+      maxRounds: 12,
+      maxCalls: 48,
       token: input.token,
     });
 

@@ -75,6 +75,18 @@ function block(label: string, body: string): string {
   return `<${label}>\n${body}\n</${label}>`;
 }
 
+/** Changed lines in the region that carry code, so a blank line does not inflate it. */
+function meaningfulLines(file: ChangedFile, hunk: Hunk): number {
+  const text = file.after ?? file.before;
+  if (!text) return hunk.endLine - hunk.startLine + 1;
+  const lines = text.split("\n");
+  let count = 0;
+  for (let n = hunk.startLine; n <= hunk.endLine; n += 1) {
+    if ((lines[n - 1] ?? "").trim().length > 0) count += 1;
+  }
+  return count;
+}
+
 export function buildExplainPrompt(input: {
   changeSet: ChangeSet;
   file: ChangedFile;
@@ -131,7 +143,7 @@ export function buildExplainPrompt(input: {
     parts.push("Other files in this change, for context:", block("files", siblings), "");
   }
 
-  const region = hunk ? hunk.endLine - hunk.startLine + 1 : 0;
+  const region = hunk ? meaningfulLines(file, hunk) : 0;
 
   parts.push(
     question

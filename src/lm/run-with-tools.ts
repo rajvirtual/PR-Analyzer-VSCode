@@ -3,11 +3,12 @@ import { invokeRepoTool, REPO_TOOLS, type ToolContext } from "./repo-tools.js";
 import { SYSTEM_PROMPT } from "./explain-prompt.js";
 import { mergeConsulted } from "./provenance.js";
 
-/** Bounded so a model that keeps asking for files cannot loop forever. */
-const MAX_TOOL_ROUNDS = 8;
+/** Bounded so a model that keeps asking for files cannot loop forever. A whole-change
+ *  read-through raises these; a single-region explain keeps the defaults. */
+const DEFAULT_MAX_TOOL_ROUNDS = 8;
 
 /** A hard ceiling on total lookups, so a wide fan-out cannot run away either. */
-const MAX_TOOL_CALLS = 24;
+const DEFAULT_MAX_TOOL_CALLS = 24;
 
 export interface RunResult {
   text: string;
@@ -32,9 +33,16 @@ export async function runWithTools(input: {
   /** Omitted when the caller wants the answer rather than a conversation. */
   stream?: vscode.ChatResponseStream;
   onProgress?: (label: string) => void;
+  /** Streamed model text as it arrives, so a caller can show the answer being written. */
+  onText?: (delta: string) => void;
+  /** Raised for a whole-change read-through, which legitimately needs more lookups. */
+  maxRounds?: number;
+  maxCalls?: number;
   token: vscode.CancellationToken;
 }): Promise<RunResult> {
   const { model, context, prompt, stream, token } = input;
+  const maxRounds = input.maxRounds ?? DEFAULT_MAX_TOOL_ROUNDS;
+  const maxCalls = input.maxCalls ?? DEFAULT_MAX_TOOL_CALLS;
   const report = (label: string): void => {
     stream?.progress(label);
     input.onProgress?.(label);
@@ -50,12 +58,12 @@ export async function runWithTools(input: {
   let toolCalls = 0;
   let consulted: string[] = [];
 
-  for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
+  for (let round = 0; round < maxRounds; round += 1) {
     if (token.isCancellationRequested) break;
 
     // On the last round the tools are withheld, which leaves answering as the only
     // move. Offered them again it would keep looking things up and return nothing.
-    const last = round === MAX_TOOL_ROUNDS - 1 || toolCalls >= MAX_TOOL_CALLS;
+    const last = round === maxRounds - 1 || toolCalls >= maxCalls;
     const response = await model.sendRequest(
       messages,
       last ? {} : { tools: REPO_TOOLS },
@@ -67,6 +75,7 @@ export async function runWithTools(input: {
       if (part instanceof vscode.LanguageModelTextPart) {
         answer += part.value;
         stream?.markdown(part.value);
+        input.onText?.(part.value);
       } else if (part instanceof vscode.LanguageModelToolCallPart) {
         calls.push(part);
       }

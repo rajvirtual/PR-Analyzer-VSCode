@@ -80,6 +80,44 @@ const ROLE_WEIGHT: Record<FileRole, number> = {
   documentation: 5,
 };
 
+/** Declared names common enough that a bare match is not worth trusting. */
+const COMMON_NAMES = new Set([
+  "Result", "Error", "Options", "Context", "Handler", "Service", "Client",
+  "Config", "Data", "Item", "Value", "Name", "Request", "Response", "Type",
+  "Model", "State", "Event", "Message", "Node", "Entry", "Info", "Manager",
+  "Provider", "Factory", "Base", "Status", "Record",
+]);
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Specific enough that a word-boundary match reads as a real cross-file reference. */
+function trustworthyName(name: string): boolean {
+  return name.length >= 4 && !COMMON_NAMES.has(name);
+}
+
+/** A file's module name: its basename without extension. */
+function moduleName(path: string): string {
+  const base = path.split("/").pop() ?? path;
+  return base.replace(/\.[^.]+$/, "");
+}
+
+const IMPORT_PATTERN =
+  /(?:import|export|require|from|using|include)\b[^;\n'"]*['"]([^'"\n]+)['"]|\b(?:import|from)\s+([\w.]+)/g;
+
+/** The segments of every module this text imports, e.g. "./a/capacity" -> capacity. */
+function extractImportedModules(text: string): Set<string> {
+  const modules = new Set<string>();
+  for (const match of text.matchAll(IMPORT_PATTERN)) {
+    const spec = match[1] ?? match[2] ?? "";
+    for (const segment of spec.split(/[/.]/)) {
+      if (segment.length >= 3) modules.add(segment);
+    }
+  }
+  return modules;
+}
+
 export function computeSignals(
   changedFiles: ChangedFile[],
   contents: Map<string, string>,
@@ -99,16 +137,30 @@ export function computeSignals(
     references.set(file.path, []);
   }
 
+  const importsByPath = new Map<string, Set<string>>();
+  for (const file of pullRequestFiles) {
+    importsByPath.set(file.path, extractImportedModules(contents.get(file.path) ?? ""));
+  }
+
   for (const owner of pullRequestFiles) {
-    const declared = declarations.get(owner.path) ?? [];
-    if (declared.length === 0) continue;
+    const declared = (declarations.get(owner.path) ?? []).filter(trustworthyName);
+    const namePattern =
+      declared.length > 0
+        ? new RegExp(`\\b(?:${declared.map(escapeRegExp).join("|")})\\b`)
+        : null;
+    const ownerModule = moduleName(owner.path);
 
     for (const other of pullRequestFiles) {
       if (other.path === owner.path) continue;
       const otherContent = contents.get(other.path);
       if (!otherContent) continue;
 
-      if (declared.some((name) => otherContent.includes(name))) {
+      // A word-boundary name hit or an import of the owner's module — far cleaner
+      // than the raw substring test, which fired on any incidental overlap.
+      const linked =
+        (namePattern !== null && namePattern.test(otherContent)) ||
+        (importsByPath.get(other.path)?.has(ownerModule) ?? false);
+      if (linked) {
         referencedBy.get(owner.path)?.push(other.path);
         references.get(other.path)?.push(owner.path);
       }

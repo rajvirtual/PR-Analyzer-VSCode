@@ -115,7 +115,7 @@ describe("buildExplainPrompt scopes an answer to the region", () => {
     const prompt = buildExplainPrompt({
       changeSet: changeSet([target]),
       file: target,
-      hunk: { startLine: 12, endLine: 12 },
+      hunk: { startLine: 3, endLine: 3 },
     });
 
     expect(prompt).toContain("That region is 1 line.");
@@ -126,10 +126,26 @@ describe("buildExplainPrompt scopes an answer to the region", () => {
     const prompt = buildExplainPrompt({
       changeSet: changeSet([target]),
       file: target,
-      hunk: { startLine: 10, endLine: 40 },
+      hunk: { startLine: 1, endLine: 5 },
     });
 
     expect(prompt).not.toContain("Two or three sentences and one example");
+  });
+
+  it("counts only non-blank changed lines, so a blank line between two declarations still earns the brevity note", () => {
+    const blanked = file({
+      before: "class Thing\n{\n}\n",
+      after:
+        'class Thing\n{\n    /// <summary>x</summary>\n    const int A = 3;\n\n    const string B = "y";\n}\n',
+    });
+    const prompt = buildExplainPrompt({
+      changeSet: changeSet([blanked]),
+      file: blanked,
+      hunk: { startLine: 3, endLine: 6 },
+    });
+
+    expect(prompt).toContain("That region is 3 lines.");
+    expect(prompt).toContain("Two or three sentences and one example");
   });
 
   it("still asks about the whole file when no region is given", () => {

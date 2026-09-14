@@ -330,14 +330,10 @@ async function load(
           return;
         }
 
-        progress.report({ message: "Tracing how the files call each other…" });
-        let built = await buildSymbolGraph(changeSet.repositoryRoot, changeSet.files, {
-          onProgress: (message) => progress.report({ message }),
-        });
-        if (!current()) return;
-
-        // The language server sharpens the graph but is not required for one.
-        if (!hasEdges(built)) built = textSymbolGraph(changeSet.files);
+        // Render from a text-only graph immediately. Awaiting the language server
+        // here is what put the reader in front of a spinner; it now sharpens the
+        // graph in the background below, off the critical path.
+        const built = textSymbolGraph(changeSet.files);
 
         const graphOrder = orderFromGraph(changeSet.files, built);
 
@@ -360,6 +356,16 @@ async function load(
         graph = built;
         setSession(new ReviewSession(changeSet, buildSteps(changeSet, order)));
         content.setChangeSet(changeSet);
+
+        // The precise language-server graph resolves off the critical path; the
+        // on-demand diagram and read-through pick it up once it is ready.
+        void (async () => {
+          const lsp = await buildSymbolGraph(changeSet.repositoryRoot, changeSet.files, {
+            token: tokens.token,
+          });
+          if (!current() || !hasEdges(lsp)) return;
+          graph = lsp;
+        })();
 
         // Pick up where this exact change was last left, if it was seen before.
         const saved = loadCheckpoint(changeSet);
@@ -632,11 +638,28 @@ async function showStory(regenerate: boolean): Promise<void> {
   let model = "";
   panel.busy("Reading the whole change…", model);
 
+  // A read-through spends a long silent stretch writing after it finishes reading; the
+  // character count turns that stretch into visible progress. A fresh lookup means it went
+  // back to reading, so the count restarts.
+  let writingChars = 0;
+  let shownAt = 0;
+
   const outcome = await writeStory({
     steps: session.steps,
     files: session.changeSet.files,
     repositoryRoot: session.changeSet.repositoryRoot,
-    onProgress: (message) => panel.busy(message, model),
+    onProgress: (message) => {
+      writingChars = 0;
+      shownAt = 0;
+      panel.busy(message, model);
+    },
+    onText: (delta) => {
+      writingChars += delta.length;
+      if (writingChars >= 40 && writingChars - shownAt >= 200) {
+        shownAt = writingChars;
+        panel.busy(`Writing the read-through… (${writingChars.toLocaleString()} characters)`, model);
+      }
+    },
     onModel: (name) => {
       model = name;
       panel.busy("Reading the whole change…", name);
