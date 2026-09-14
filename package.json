@@ -1,6 +1,6 @@
 {
   "name": "pr-analyzer",
-  "displayName": "PR Analyzer — review a pull request or branch",
+  "displayName": "AI PR Analyzer",
   "description": "Walk a large change in execution order: ordered steps, native diffs, and a map of how the files connect",
   "version": "0.5.1",
   "publisher": "rajeshvijay",
@@ -49,7 +49,7 @@
       {
         "id": "prAnalyzer.chat",
         "name": "pr",
-        "fullName": "PR Analyzer",
+        "fullName": "AI PR Analyzer",
         "description": "Explain the change you are reviewing",
         "isSticky": true,
         "commands": [
@@ -64,7 +64,7 @@
       "activitybar": [
         {
           "id": "prAnalyzer",
-          "title": "PR Analyzer",
+          "title": "AI PR Analyzer",
           "icon": "media/icon.svg"
         }
       ]
@@ -88,114 +88,114 @@
       {
         "command": "prAnalyzer.reviewBranch",
         "title": "Review this branch",
-        "category": "PR Analyzer",
+        "category": "AI PR Analyzer",
         "icon": "$(play)"
       },
       {
         "command": "prAnalyzer.reviewPullRequest",
         "title": "Review a pull request by URL",
-        "category": "PR Analyzer",
+        "category": "AI PR Analyzer",
         "icon": "$(git-pull-request)"
       },
       {
         "command": "prAnalyzer.showDiagram",
         "title": "Open the map",
-        "category": "PR Analyzer",
+        "category": "AI PR Analyzer",
         "icon": "$(type-hierarchy)"
       },
       {
         "command": "prAnalyzer.refresh",
         "title": "Refresh",
-        "category": "PR Analyzer",
+        "category": "AI PR Analyzer",
         "icon": "$(refresh)"
       },
       {
         "command": "prAnalyzer.next",
         "title": "Next change, then next file",
-        "category": "PR Analyzer",
+        "category": "AI PR Analyzer",
         "icon": "$(chevron-down)"
       },
       {
         "command": "prAnalyzer.previous",
         "title": "Previous change, then previous file",
-        "category": "PR Analyzer",
+        "category": "AI PR Analyzer",
         "icon": "$(chevron-up)"
       },
       {
         "command": "prAnalyzer.setBaseRef",
         "title": "Set the branch to compare against",
-        "category": "PR Analyzer"
+        "category": "AI PR Analyzer"
       },
       {
         "command": "prAnalyzer.explainChange",
         "title": "Explain this change",
-        "category": "PR Analyzer",
+        "category": "AI PR Analyzer",
         "icon": "$(sparkle)"
       },
       {
         "command": "prAnalyzer.addRepositoryFolder",
         "title": "Add a folder to search for clones",
-        "category": "PR Analyzer"
+        "category": "AI PR Analyzer"
       },
       {
         "command": "prAnalyzer.showGitLog",
         "title": "Show the git commands",
-        "category": "PR Analyzer",
+        "category": "AI PR Analyzer",
         "icon": "$(terminal)"
       },
       {
         "command": "prAnalyzer.toggleFilesView",
         "title": "Group the files by folder, or flatten them",
-        "category": "PR Analyzer",
+        "category": "AI PR Analyzer",
         "icon": "$(list-tree)"
       },
       {
         "command": "prAnalyzer.signIn",
         "title": "Sign in to Azure DevOps",
-        "category": "PR Analyzer"
+        "category": "AI PR Analyzer"
       },
       {
         "command": "prAnalyzer.signOut",
         "title": "Forget the stored Azure DevOps token",
-        "category": "PR Analyzer"
+        "category": "AI PR Analyzer"
       },
       {
         "command": "prAnalyzer.explainHunk",
         "title": "Explain this change",
-        "category": "PR Analyzer"
+        "category": "AI PR Analyzer"
       },
       {
         "command": "prAnalyzer.showStory",
         "title": "Read this change end to end",
-        "category": "PR Analyzer",
+        "category": "AI PR Analyzer",
         "icon": "$(book)"
       },
       {
         "command": "prAnalyzer.mapIntent",
         "title": "Map intent to evidence",
-        "category": "PR Analyzer",
+        "category": "AI PR Analyzer",
         "icon": "$(checklist)"
       },
       {
         "command": "prAnalyzer.addNote",
         "title": "Add a review note to the pull request",
-        "category": "PR Analyzer",
+        "category": "AI PR Analyzer",
         "icon": "$(comment)"
       },
       {
         "command": "prAnalyzer.clearClones",
         "title": "Clear cached clones",
-        "category": "PR Analyzer"
+        "category": "AI PR Analyzer"
       },
       {
         "command": "prAnalyzer.selectModel",
         "title": "Select model",
-        "category": "PR Analyzer"
+        "category": "AI PR Analyzer"
       },
       {
         "command": "prAnalyzer.selectStructureModel",
         "title": "Select structure model",
-        "category": "PR Analyzer"
+        "category": "AI PR Analyzer"
       }
     ],
     "keybindings": [
@@ -308,7 +308,7 @@
       ]
     },
     "configuration": {
-      "title": "PR Analyzer",
+      "title": "AI PR Analyzer",
       "properties": {
         "prAnalyzer.baseRef": {
           "type": "string",

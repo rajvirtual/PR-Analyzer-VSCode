@@ -1,8 +1,8 @@
-# PR Analyzer
+# AI PR Analyzer
 
 Review a large change the way it was written, not the way it was filed.
 
-A pull request of fifty files arrives as an alphabetical list. PR Analyzer orders those
+A pull request of fifty files arrives as an alphabetical list. AI PR Analyzer orders those
 files into the flow a reader should follow, opens each one at the change itself, and draws
 a diagram of what the change actually does — so you can understand a branch before you
 start reading it.
@@ -97,7 +97,7 @@ Azure DevOps, either way round:
 - **Your VS Code account**, if it can reach the organisation. Nothing to type.
 - **A personal access token**, for organisations account sign-in cannot reach. Create one
   under *User settings → Personal access tokens* with **Code (read)**, then run
-  **PR Analyzer: Sign in to Azure DevOps** and choose the token. It is kept in VS Code's
+  **AI PR Analyzer: Sign in to Azure DevOps** and choose the token. It is kept in VS Code's
   secret storage, never in settings, and **Forget the stored Azure DevOps token** removes it.
 
 Both `dev.azure.com` and the older `*.visualstudio.com` hosts are understood.
@@ -106,13 +106,13 @@ Both `dev.azure.com` and the older `*.visualstudio.com` hosts are understood.
 
 Two ways in. Neither asks you to prepare anything by hand.
 
-**A pull request, from nothing.** Run **PR Analyzer: Review a pull request by URL** and paste
+**A pull request, from nothing.** Run **AI PR Analyzer: Review a pull request by URL** and paste
 an Azure DevOps link. That is the whole setup: the repository does not have to be open,
 checked out, or even cloned. A missing clone is offered, and the pull request is checked out
 into a worktree of its own, removed when you move on. Your branch is never touched.
 
-**A branch you are already on.** Open the repository and run **PR Analyzer: Review this
-branch**, or press the button in the PR Analyzer view. Uncommitted work is included, so there
+**A branch you are already on.** Open the repository and run **AI PR Analyzer: Review this
+branch**, or press the button in the AI PR Analyzer view. Uncommitted work is included, so there
 is nothing to push or even commit first.
 
 Then, either way:
@@ -142,22 +142,22 @@ move on. Continuing without a clone still works, with only the changed files.
 
 | Command | What it does |
 | --- | --- |
-| `PR Analyzer: Review this branch` | Reads your branch against its merge base |
-| `PR Analyzer: Review a pull request by URL` | Reads an Azure DevOps pull request at its pinned commits |
-| `PR Analyzer: Read this change end to end` | Opens the read-through of the whole change |
-| `PR Analyzer: Map intent to evidence` | Lays each stated intent beside the files and tests that deliver it |
-| `PR Analyzer: Open the map` | Draws the diagram |
-| `PR Analyzer: Explain this change` | Opens chat on the change you are looking at |
-| `PR Analyzer: Add a review note to the pull request` | Posts a comment on the pull request, anchored to the file and line on screen |
-| `PR Analyzer: Next change, then next file` | `F7` / `Alt+Down` |
-| `PR Analyzer: Previous change, then previous file` | `Shift+F7` / `Alt+Up` |
-| `PR Analyzer: Group the files by folder, or flatten them` | Switches the Files view between reading order and folders |
-| `PR Analyzer: Set the branch to compare against` | Overrides the detected base branch |
-| `PR Analyzer: Refresh` | Re-reads the change |
-| `PR Analyzer: Sign in to Azure DevOps` | Chooses the account or token used for pull requests |
-| `PR Analyzer: Forget the stored Azure DevOps token` | Removes the stored token, leaving your account sign-in |
-| `PR Analyzer: Add a folder to search for clones` | Teaches it where you keep clones |
-| `PR Analyzer: Show the git commands` | Opens the log of every git command it ran |
+| `AI PR Analyzer: Review this branch` | Reads your branch against its merge base |
+| `AI PR Analyzer: Review a pull request by URL` | Reads an Azure DevOps pull request at its pinned commits |
+| `AI PR Analyzer: Read this change end to end` | Opens the read-through of the whole change |
+| `AI PR Analyzer: Map intent to evidence` | Lays each stated intent beside the files and tests that deliver it |
+| `AI PR Analyzer: Open the map` | Draws the diagram |
+| `AI PR Analyzer: Explain this change` | Opens chat on the change you are looking at |
+| `AI PR Analyzer: Add a review note to the pull request` | Posts a comment on the pull request, anchored to the file and line on screen |
+| `AI PR Analyzer: Next change, then next file` | `F7` / `Alt+Down` |
+| `AI PR Analyzer: Previous change, then previous file` | `Shift+F7` / `Alt+Up` |
+| `AI PR Analyzer: Group the files by folder, or flatten them` | Switches the Files view between reading order and folders |
+| `AI PR Analyzer: Set the branch to compare against` | Overrides the detected base branch |
+| `AI PR Analyzer: Refresh` | Re-reads the change |
+| `AI PR Analyzer: Sign in to Azure DevOps` | Chooses the account or token used for pull requests |
+| `AI PR Analyzer: Forget the stored Azure DevOps token` | Removes the stored token, leaving your account sign-in |
+| `AI PR Analyzer: Add a folder to search for clones` | Teaches it where you keep clones |
+| `AI PR Analyzer: Show the git commands` | Opens the log of every git command it ran |
 
 ## Settings
 
@@ -167,7 +167,7 @@ move on. Continuing without a clone still works, with only the changed files.
 | `prAnalyzer.includeUncommitted` | `true` | Include working tree changes, so a branch can be reviewed before it is pushed |
 | `prAnalyzer.ordering` | `model` | `model` asks a model to order the files; `references` uses the reference graph alone and spends nothing |
 | `prAnalyzer.model` | *(empty)* | Model for ordering and the diagram. Empty follows the model you last used in `@pr` chat |
-| `prAnalyzer.repositorySearchPaths` | `[]` | Folders holding your clones. Each is checked for a directory named after the repository. Choosing **Locate it**, or running **PR Analyzer: Add a folder to search for clones**, adds one for you |
+| `prAnalyzer.repositorySearchPaths` | `[]` | Folders holding your clones. Each is checked for a directory named after the repository. Choosing **Locate it**, or running **AI PR Analyzer: Add a folder to search for clones**, adds one for you |
 | `prAnalyzer.filesView` | `flat` | `flat` is one numbered list in reading order, matching `F7` exactly. `folders` shows the repository's shape, sorted alphabetically like a pull request page — the reading order is not the list's order there, so the step number moves into the description. The tree icon above the list switches between them |
 
 ## Moving around the diagram
@@ -182,7 +182,7 @@ move on. Continuing without a clone still works, with only the changed files.
 
 Every git command is recorded, with the folder it ran in, how long it took, and what
 git said when it failed. Open it from the toolbar button above the **Files** list, or
-run **PR Analyzer: Show the git commands**. Each line is written the way you would type
+run **AI PR Analyzer: Show the git commands**. Each line is written the way you would type
 it, so a failure can be reproduced in a terminal.
 
 ## What it sends, and where
