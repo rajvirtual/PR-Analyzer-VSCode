@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { formatCall, onGitCall, type GitCall } from "../git/run-git.js";
+import { formatModelPhases, onModelCall } from "../lm/lm-timing.js";
 
 /**
  * The git commands, where the reader can see them.
@@ -13,13 +14,18 @@ export class GitLog {
   private failures = 0;
 
   constructor() {
-    this.channel = vscode.window.createOutputChannel("PR Analyzer: Git", { log: true });
+    this.channel = vscode.window.createOutputChannel("AI PR Analyzer: Git", { log: true });
   }
 
   /** Records every git call from now on. */
   listen(): vscode.Disposable {
     const subscription = onGitCall((call) => this.write(call));
-    return new vscode.Disposable(() => subscription.dispose());
+    // The model calls belong beside the git ones: together they are the whole wait.
+    const models = onModelCall((phases) => this.channel.info(formatModelPhases(phases)));
+    return new vscode.Disposable(() => {
+      subscription.dispose();
+      models.dispose();
+    });
   }
 
   private write(call: GitCall): void {
@@ -39,6 +45,11 @@ export class GitLog {
   startRun(label: string): void {
     this.failures = 0;
     this.channel.info(`─── ${label} ───`);
+  }
+
+  /** Anything worth reading beside the commands, such as the order a review settled on. */
+  note(message: string): void {
+    this.channel.info(message);
   }
 
   get failureCount(): number {

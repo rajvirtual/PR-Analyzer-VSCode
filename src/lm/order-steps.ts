@@ -51,7 +51,7 @@ export async function orderStepsWithModel(input: {
     };
   }
 
-  const user = buildOrderPrompt(files, graph);
+  const user = buildOrderPrompt(files, graph, fallbackOrder);
   const messages = [
     vscode.LanguageModelChatMessage.User(ORDER_SYSTEM_PROMPT),
     vscode.LanguageModelChatMessage.User(user),

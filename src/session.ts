@@ -1,5 +1,5 @@
 import type { ChangeSet, ChangedFile, Effort, Step } from "./model/changeset.js";
-import { computeSignals, flowOrder } from "./analysis/ordering-signals.js";
+import { flowOrder, signalsFor } from "./analysis/ordering-signals.js";
 import { diffLines } from "./analysis/unified-diff.js";
 
 export interface Hunk {
@@ -40,12 +40,7 @@ export function buildSteps(
   changeSet: ChangeSet,
   order?: { path: string; title?: string; effort?: Effort }[],
 ): Step[] {
-  const contents = new Map<string, string>();
-  for (const file of changeSet.files) {
-    contents.set(file.path, file.after ?? file.before ?? "");
-  }
-
-  const signals = computeSignals(changeSet.files, contents);
+  const signals = signalsFor(changeSet.files);
   const roleByPath = new Map(signals.map((signal) => [signal.path, signal.role]));
   const byPath = new Map(changeSet.files.map((file) => [file.path, file]));
 
@@ -101,6 +96,8 @@ export class ReviewSession {
   private hunkIndex = 0;
   private hunkCache = new Map<string, Hunk[]>();
   private readonly visited = new Set<string>();
+  /** Opened in this sitting, as opposed to remembered from a previous one. */
+  private readonly opened = new Set<string>();
 
   constructor(
     readonly changeSet: ChangeSet,
@@ -174,7 +171,10 @@ export class ReviewSession {
 
   private markVisited(): void {
     const step = this.steps[this.stepIndex];
-    if (step) this.visited.add(step.id);
+    if (step) {
+      this.visited.add(step.id);
+      this.opened.add(step.id);
+    }
   }
 
   /** How much of the change the reader has opened, and how much was left out. */
@@ -189,6 +189,17 @@ export class ReviewSession {
   /** The file paths already opened, for a checkpoint that outlives step numbering. */
   visitedPaths(): string[] {
     return this.steps.filter((step) => this.visited.has(step.id)).map((step) => step.file.path);
+  }
+
+  /**
+   * The paths opened since this review was loaded.
+   *
+   * Re-ordering must not move what the reader is looking at, but a file they read days
+   * ago and a file they are reading now are not the same thing: pinning the former froze
+   * a stale order over a correct one.
+   */
+  openedPaths(): string[] {
+    return this.steps.filter((step) => this.opened.has(step.id)).map((step) => step.file.path);
   }
 
   /** The file being read, by path. */

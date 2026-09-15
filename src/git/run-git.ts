@@ -30,7 +30,7 @@ export function onGitCall(listener: Listener): { dispose(): void } {
 }
 
 /** Never wait on a credential prompt: no terminal is attached, so it would hang. */
-const NO_PROMPT = { ...process.env, GIT_TERMINAL_PROMPT: "0" };
+export const NO_PROMPT = { ...process.env, GIT_TERMINAL_PROMPT: "0" };
 
 const MAX_BUFFER = 64 * 1024 * 1024;
 
@@ -65,6 +65,11 @@ function report(call: GitCall): void {
       // A broken listener must not take the git call down with it.
     }
   }
+}
+
+/** For git run outside this module, which should still show up in the log. */
+export function reportGitCall(call: GitCall): void {
+  report(call);
 }
 
 function describe(error: unknown): string {

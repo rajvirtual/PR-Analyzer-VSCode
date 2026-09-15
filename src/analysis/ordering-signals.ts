@@ -25,6 +25,8 @@ export interface FileSignal {
   referencedBy: string[];
   /** Paths in the change whose symbols this file references. */
   references: string[];
+  /** How often this file names each of them: a delegate is named more than a mention. */
+  referenceStrength: Map<string, number>;
   /** How strongly this file looks like where the flow starts. */
   entryScore: number;
   firstCommitIndex: number;
@@ -48,6 +50,18 @@ const DECLARATION_PATTERNS = [
 /** Names that usually sit at the top of a flow rather than being called into. */
 const ENTRY_POINT_PATTERN =
   /(^|\/)(program|main|startup|entry[-_]?point)\.[a-z]+$|workflow|scheduler|controller|route|endpoint|dispatcher|orchestrat|pipeline|job/i;
+
+/**
+ * A file named for the thing that invokes it.
+ *
+ * The folder says where a file lives, and a whole feature usually lives in one folder;
+ * the file name is what distinguishes the task a platform calls into from the handler,
+ * contract and model it reaches afterwards.
+ */
+const ENTRY_FILE_PATTERN = /(task|controller|endpoint|job|worker|trigger|listener|command)\.[a-z]+$/i;
+
+/** The teardown half of a lifecycle: the same shape as an entry point, at the other end. */
+const TEARDOWN_FILE_PATTERN = /(delete|teardown|cleanup|dispose|remove)[a-z0-9]*\.[a-z]+$/i;
 
 export function classifyRole(path: string): FileRole {
   if (TEST_PATTERN.test(path) || TEST_FILE_PATTERN.test(path)) return "test";
@@ -88,10 +102,6 @@ const COMMON_NAMES = new Set([
   "Provider", "Factory", "Base", "Status", "Record",
 ]);
 
-function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 /** Specific enough that a word-boundary match reads as a real cross-file reference. */
 function trustworthyName(name: string): boolean {
   return name.length >= 4 && !COMMON_NAMES.has(name);
@@ -118,6 +128,61 @@ function extractImportedModules(text: string): Set<string> {
   return modules;
 }
 
+const IDENTIFIER = /[A-Za-z_][A-Za-z0-9_]*/g;
+
+const signalCache = new WeakMap<readonly ChangedFile[], FileSignal[]>();
+
+/**
+ * The signals for a change set, computed once.
+ *
+ * Both the reference graph and the step list want these, and the scan is the most
+ * expensive pure work in a review; keying the result on the file list means the
+ * second caller — and a re-ordering pass — pays nothing.
+ */
+export function signalsFor(files: ChangedFile[]): FileSignal[] {
+  const cached = signalCache.get(files);
+  if (cached) return cached;
+
+  const contents = new Map<string, string>();
+  for (const file of files) {
+    contents.set(file.path, file.after ?? file.before ?? "");
+  }
+
+  const computed = computeSignals(files, contents);
+  signalCache.set(files, computed);
+  return computed;
+}
+
+/** Every identifier-shaped word in the text, once. */
+/**
+ * A name in a comment is prose about the flow, not a step in it.
+ *
+ * A doc comment saying "the teardown half of this lifecycle lives in DeleteTask" was
+ * enough to make the setup task look like it calls the delete task, which sent the
+ * whole walk sideways.
+ */
+function stripComments(text: string): string {
+  return text
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/(^|[^:])\/\/[^\n]*/g, "$1")
+    .replace(/<!--[\s\S]*?-->/g, " ");
+}
+
+/** Every identifier-shaped word in the text, with how often it appears. */
+function tokenize(text: string): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const match of stripComments(text).matchAll(IDENTIFIER)) {
+    counts.set(match[0], (counts.get(match[0]) ?? 0) + 1);
+  }
+  return counts;
+}
+
+function addOwner(index: Map<string, string[]>, key: string, path: string): void {
+  const owners = index.get(key);
+  if (owners) owners.push(path);
+  else index.set(key, [path]);
+}
+
 export function computeSignals(
   changedFiles: ChangedFile[],
   contents: Map<string, string>,
@@ -142,28 +207,49 @@ export function computeSignals(
     importsByPath.set(file.path, extractImportedModules(contents.get(file.path) ?? ""));
   }
 
+  // One pass over each file's identifiers, against a map of who declares what. Testing
+  // every file's declarations against every other file's whole content was quadratic in
+  // bytes, and ran on the thread that paints the Files view.
+  const ownersByName = new Map<string, string[]>();
+  const ownersByModule = new Map<string, string[]>();
   for (const owner of pullRequestFiles) {
-    const declared = (declarations.get(owner.path) ?? []).filter(trustworthyName);
-    const namePattern =
-      declared.length > 0
-        ? new RegExp(`\\b(?:${declared.map(escapeRegExp).join("|")})\\b`)
-        : null;
-    const ownerModule = moduleName(owner.path);
+    for (const name of (declarations.get(owner.path) ?? []).filter(trustworthyName)) {
+      addOwner(ownersByName, name, owner.path);
+    }
+    addOwner(ownersByModule, moduleName(owner.path), owner.path);
+  }
 
+  const reaches = new Map<string, Map<string, number>>();
+  for (const other of pullRequestFiles) {
+    const found = new Map<string, number>();
+    const content = contents.get(other.path);
+    if (content) {
+      for (const [token, count] of tokenize(content)) {
+        for (const owner of ownersByName.get(token) ?? []) {
+          found.set(owner, (found.get(owner) ?? 0) + count);
+        }
+      }
+      for (const module of importsByPath.get(other.path) ?? []) {
+        for (const owner of ownersByModule.get(module) ?? []) {
+          found.set(owner, (found.get(owner) ?? 0) + 1);
+        }
+      }
+    }
+    reaches.set(other.path, found);
+  }
+
+  // Emitted owner-major, so both sides of every edge read in file order.
+  const strength = new Map<string, Map<string, number>>();
+  for (const file of pullRequestFiles) strength.set(file.path, new Map());
+
+  for (const owner of pullRequestFiles) {
     for (const other of pullRequestFiles) {
       if (other.path === owner.path) continue;
-      const otherContent = contents.get(other.path);
-      if (!otherContent) continue;
-
-      // A word-boundary name hit or an import of the owner's module — far cleaner
-      // than the raw substring test, which fired on any incidental overlap.
-      const linked =
-        (namePattern !== null && namePattern.test(otherContent)) ||
-        (importsByPath.get(other.path)?.has(ownerModule) ?? false);
-      if (linked) {
-        referencedBy.get(owner.path)?.push(other.path);
-        references.get(other.path)?.push(owner.path);
-      }
+      const weight = reaches.get(other.path)?.get(owner.path);
+      if (!weight) continue;
+      referencedBy.get(owner.path)?.push(other.path);
+      references.get(other.path)?.push(owner.path);
+      strength.get(other.path)?.set(owner.path, weight);
     }
   }
 
@@ -175,11 +261,15 @@ export function computeSignals(
     // The start of a flow calls into other files without being called itself.
     let entryScore = 0;
     if (ENTRY_POINT_PATTERN.test(file.path)) entryScore += 3;
+    if (ENTRY_FILE_PATTERN.test(file.path)) entryScore += 4;
+    if (TEARDOWN_FILE_PATTERN.test(file.path)) entryScore -= 2;
     if (role === "configuration" && outbound.length > 0) entryScore += 3;
     if (inbound.length === 0 && outbound.length > 0) entryScore += 2;
     entryScore += Math.min(outbound.length, 3);
     entryScore -= Math.min(inbound.length, 3);
     if (role === "test") entryScore -= 4;
+    // Documentation is the end of the story even more surely than a test is.
+    if (role === "documentation") entryScore -= 6;
 
     return {
       path: file.path,
@@ -188,6 +278,7 @@ export function computeSignals(
       declares: declarations.get(file.path) ?? [],
       referencedBy: inbound,
       references: outbound,
+      referenceStrength: strength.get(file.path) ?? new Map(),
       entryScore,
       firstCommitIndex: 0,
     };
@@ -201,8 +292,14 @@ export function computeSignals(
  */
 export function flowOrder(signals: FileSignal[]): string[] {
   const byPath = new Map(signals.map((signal) => [signal.path, signal]));
+
+  // Whatever the scores say, no production file reads after the tests.
+  const tail = (signal: FileSignal): number =>
+    signal.role === "documentation" ? 2 : signal.role === "test" ? 1 : 0;
+
   const ranked = [...signals].sort(
-    (a, b) => b.entryScore - a.entryScore || a.path.localeCompare(b.path),
+    (a, b) =>
+      tail(a) - tail(b) || b.entryScore - a.entryScore || a.path.localeCompare(b.path),
   );
 
   const ordered: string[] = [];
@@ -216,11 +313,19 @@ export function flowOrder(signals: FileSignal[]): string[] {
     const signal = byPath.get(path);
     if (!signal) return;
 
-    // Follow the callees in a stable order so the same change always reads the same way.
+    // Follow what this file leans on hardest first. Sorting by entry score instead sent
+    // the walk to whichever callee most looked like another entry point — a sibling task
+    // or a base class — rather than to the handler the file actually delegates to.
     const callees = [...signal.references]
       .map((callee) => byPath.get(callee))
       .filter((callee): callee is FileSignal => callee !== undefined)
-      .sort((a, b) => b.entryScore - a.entryScore || a.path.localeCompare(b.path));
+      .sort(
+        (a, b) =>
+          (signal.referenceStrength.get(b.path) ?? 0) -
+            (signal.referenceStrength.get(a.path) ?? 0) ||
+          b.entryScore - a.entryScore ||
+          a.path.localeCompare(b.path),
+      );
 
     for (const callee of callees) {
       walk(callee.path);

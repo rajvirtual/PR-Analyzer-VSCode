@@ -24,6 +24,7 @@ const progress = document.getElementById("progress") as HTMLDivElement;
 const overlay = document.getElementById("overlay") as HTMLDivElement;
 const overlayText = document.getElementById("overlay-text") as HTMLSpanElement;
 const overlayDetail = document.getElementById("overlay-detail") as HTMLElement;
+const overlaySource = document.getElementById("overlay-source") as HTMLPreElement;
 
 const modelButton = document.getElementById("model") as HTMLButtonElement;
 
@@ -48,6 +49,8 @@ function setBusy(text: string | undefined, detail: string | undefined): void {
 function setIdle(): void {
   progress.classList.remove("busy");
   overlay.classList.remove("busy");
+  overlaySource.classList.remove("written");
+  overlaySource.textContent = "";
   if (ticker !== undefined) {
     window.clearInterval(ticker);
     ticker = undefined;
@@ -428,6 +431,12 @@ window.addEventListener("message", (event) => {
     void render(message.definition);
   }
   if (message.type === "busy") setBusy(message.text, message.detail);
+  if (message.type === "source" && message.text !== undefined) {
+    // Watching it being written is the difference between waiting and reading.
+    overlaySource.classList.add("written");
+    overlaySource.textContent = message.text;
+    overlaySource.scrollTop = overlaySource.scrollHeight;
+  }
   if (message.type === "model" && message.text) modelButton.textContent = message.text;
   if (message.type === "highlight") highlight(message.node ?? null);
   if (message.type === "status" && message.text) {

@@ -1,9 +1,11 @@
 import * as vscode from "vscode";
 import type { Hunk, ReviewSession } from "../session.js";
 import { buildExplainPrompt } from "../lm/explain-prompt.js";
+import { ModelTimer } from "../lm/lm-timing.js";
 import { runWithTools } from "../lm/run-with-tools.js";
 import { selectModel } from "../lm/select-model.js";
 import { matchChangedFile } from "../analysis/match-file.js";
+import type { ActivityStatus } from "./activity-status.js";
 
 /**
  * The explanation, written where the change is.
@@ -15,6 +17,12 @@ import { matchChangedFile } from "../analysis/match-file.js";
 export class InlineExplainer {
   private readonly controller: vscode.CommentController;
   private readonly threads = new Map<string, vscode.CommentThread>();
+  private activity: ActivityStatus | undefined;
+
+  /** Told about the status item rather than owning it, since every view shares one. */
+  reportTo(activity: ActivityStatus): void {
+    this.activity = activity;
+  }
 
   constructor() {
     this.controller = vscode.comments.createCommentController(
@@ -43,6 +51,9 @@ export class InlineExplainer {
 
     const thread = this.threadFor(uri, hunk);
     thread.comments = [comment(`Reading the change… _(${model.name})_`)];
+    const timer = new ModelTimer("explain");
+    timer.model(model.name);
+    this.activity?.start("explain", "Explaining this change…");
 
     try {
       let draft = "";
@@ -57,6 +68,7 @@ export class InlineExplainer {
         prompt: buildExplainPrompt({ changeSet: session.changeSet, file, hunk }),
         // Show the lookups, then the answer as it is written, so a slow explain is never blank.
         onProgress: (label) => {
+          this.activity?.start("explain", label);
           if (!draft) thread.comments = [comment(`${label}… _(${model.name})_`)];
         },
         onText: (delta) => {
@@ -66,8 +78,10 @@ export class InlineExplainer {
             thread.comments = [comment(draft)];
           }
         },
+        timer,
         token,
       });
+      timer.lastToken(result.toolCalls);
 
       const text = result.text.trim();
       thread.comments = [
@@ -78,7 +92,11 @@ export class InlineExplainer {
               : `${model.name} returned nothing.`),
         ),
       ];
+      timer.rendered();
+      this.activity?.done("explain");
     } catch (error) {
+      timer.cancelled();
+      this.activity?.done("explain");
       thread.comments = [
         comment(`Could not explain this: ${error instanceof Error ? error.message : String(error)}`),
       ];

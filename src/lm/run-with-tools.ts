@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { invokeRepoTool, REPO_TOOLS, type ToolContext } from "./repo-tools.js";
 import { SYSTEM_PROMPT } from "./explain-prompt.js";
+import type { ModelTimer } from "./lm-timing.js";
 import { mergeConsulted } from "./provenance.js";
 
 /** Bounded so a model that keeps asking for files cannot loop forever. A whole-change
@@ -38,6 +39,7 @@ export async function runWithTools(input: {
   /** Raised for a whole-change read-through, which legitimately needs more lookups. */
   maxRounds?: number;
   maxCalls?: number;
+  timer?: ModelTimer;
   token: vscode.CancellationToken;
 }): Promise<RunResult> {
   const { model, context, prompt, stream, token } = input;
@@ -64,6 +66,7 @@ export async function runWithTools(input: {
     // On the last round the tools are withheld, which leaves answering as the only
     // move. Offered them again it would keep looking things up and return nothing.
     const last = round === maxRounds - 1 || toolCalls >= maxCalls;
+    input.timer?.sent();
     const response = await model.sendRequest(
       messages,
       last ? {} : { tools: REPO_TOOLS },
@@ -74,6 +77,7 @@ export async function runWithTools(input: {
     for await (const part of response.stream) {
       if (part instanceof vscode.LanguageModelTextPart) {
         answer += part.value;
+        input.timer?.firstToken();
         stream?.markdown(part.value);
         input.onText?.(part.value);
       } else if (part instanceof vscode.LanguageModelToolCallPart) {

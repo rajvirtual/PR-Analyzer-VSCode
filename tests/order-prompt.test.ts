@@ -231,4 +231,16 @@ describe("ORDER_SYSTEM_PROMPT anchors the flow at both ends", () => {
   it("tells the model to believe the code over the graph", () => {
     expect(ORDER_SYSTEM_PROMPT).toMatch(/believe the code/);
   });
+
+  // A task's handler was landing twelfth, behind everything the handler itself reads.
+  it("puts what an entry point delegates to immediately after it", () => {
+    expect(ORDER_SYSTEM_PROMPT).toContain("HANDS OFF TO comes immediately after it");
+    expect(ORDER_SYSTEM_PROMPT).toContain("Put the delegate second, not twelfth");
+  });
+
+  // The delete task was second and its teardown handler fifteenth: one flow, torn in half.
+  it("keeps a lifecycle's task and handler together", () => {
+    expect(ORDER_SYSTEM_PROMPT).toContain("ADJACENT");
+    expect(ORDER_SYSTEM_PROMPT).toMatch(/setup lifecycle and a teardown lifecycle are two flows/);
+  });
 });

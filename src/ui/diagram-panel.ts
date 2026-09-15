@@ -3,7 +3,9 @@ import type { ChangedFile, Step } from "../model/changeset.js";
 import type { SymbolGraph } from "../analysis/flow-order.js";
 import { buildMermaid, stepIdForNode, type Direction } from "../analysis/mermaid.js";
 import { drawDiagram } from "../lm/draw-diagram.js";
+import type { ModelTimer } from "../lm/lm-timing.js";
 import { beginExclusiveModelWork, clearExclusiveModelWork } from "../lm/model-gate.js";
+import type { ActivityStatus } from "./activity-status.js";
 import { pickStructureModel } from "../lm/select-model.js";
 import type { DrawnDiagram } from "../lm/diagram-prompt.js";
 
@@ -23,6 +25,12 @@ export interface DiagramCache {
 
 export class DiagramPanel {
   private static current: DiagramPanel | undefined;
+  private static activity: ActivityStatus | undefined;
+
+  /** Told about the status item rather than owning it, since every view shares one. */
+  static reportTo(activity: ActivityStatus): void {
+    DiagramPanel.activity = activity;
+  }
 
   private panel: vscode.WebviewPanel;
   private direction: Direction = "TD";
@@ -32,6 +40,7 @@ export class DiagramPanel {
   private drawing = false;
   private drawGeneration = 0;
   private drawTokens: vscode.CancellationTokenSource | null = null;
+  private drawTimer: ModelTimer | null = null;
   private ready = false;
   private disposed = false;
 
@@ -223,19 +232,26 @@ export class DiagramPanel {
         text: "Drawing the change…",
         detail: `${this.files.length} files`,
       });
+      DiagramPanel.activity?.start("diagram", "Drawing the map…");
 
       const outcome = await drawDiagram({
         steps: this.steps,
         files: this.files,
         graph: this.graph,
         repositoryRoot: this.repositoryRoot,
-        onProgress: (label) =>
-          void this.panel.webview.postMessage({ type: "busy", detail: label }),
+        onProgress: (label) => {
+          DiagramPanel.activity?.start("diagram", label);
+          void this.panel.webview.postMessage({ type: "busy", detail: label });
+        },
+        onSource: (mermaid) =>
+          void this.panel.webview.postMessage({ type: "source", text: mermaid }),
         onModel: (name) => void this.panel.webview.postMessage({ type: "model", text: name }),
         token: tokens.token,
       });
       this.drawing = false;
       clearExclusiveModelWork(tokens);
+      DiagramPanel.activity?.done("diagram");
+      this.drawTimer = outcome.timer ?? null;
 
       // Inputs changed while drawing; draw the current review rather than publish a
       // diagram of the one it replaced.
@@ -246,6 +262,8 @@ export class DiagramPanel {
 
       // Another model view took over; leave the plain map without a failure notice.
       if (tokens.token.isCancellationRequested) {
+        this.drawTimer?.cancelled();
+        this.drawTimer = null;
         this.view = "files";
         void this.push();
         return;
@@ -287,6 +305,8 @@ export class DiagramPanel {
             ? this.drawn.mermaid.replace(/^flowchart\s+TD/, "flowchart LR")
             : this.drawn.mermaid,
       });
+      this.drawTimer?.rendered();
+      this.drawTimer = null;
     }
   }
 
@@ -338,6 +358,13 @@ export class DiagramPanel {
   #overlay.busy { display: grid; }
   #overlay div { text-align: center; font-size: 13px; line-height: 1.8; }
   #overlay small { display: block; opacity: 0.7; font-size: 11px; }
+  #overlay pre {
+    display: none; text-align: left; margin: 12px auto 0; max-width: 680px; max-height: 40vh;
+    overflow: auto; padding: 10px 12px; border-radius: 4px; font-size: 11px; line-height: 1.5;
+    background: var(--vscode-textCodeBlock-background); color: var(--vscode-foreground);
+    font-family: var(--vscode-editor-font-family); opacity: 0.8;
+  }
+  #overlay pre.written { display: block; }
   #stage { position: relative; flex: 1; min-height: 0; display: flex; }
   #surface { flex: 1; overflow: hidden; cursor: grab; touch-action: none; }
   #surface:active { cursor: grabbing; }
@@ -386,6 +413,7 @@ export class DiagramPanel {
       <div>
         <span id="overlay-text">Drawing the change…</span>
         <small id="overlay-detail"></small>
+        <pre id="overlay-source"></pre>
       </div>
     </div>
   </div>

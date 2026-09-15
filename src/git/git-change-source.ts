@@ -1,4 +1,6 @@
 import type { ChangeSet, ChangedFile, ChangeType, SideUnavailable } from "../model/changeset.js";
+import { mapWithConcurrency } from "../analysis/concurrency.js";
+import { isBlobOid, readBlobs, type Blob } from "./cat-file.js";
 import { runGitRaw } from "./run-git.js";
 
 /** Large enough for a source file, small enough that a stray blob cannot stall the UI. */
@@ -69,10 +71,17 @@ function parseChangeType(status: string): ChangeType {
 async function showAtCommit(cwd: string, commit: string, path: string): Promise<SideRead> {
   try {
     const text = await git(cwd, ["show", `${commit}:${path}`]);
+    if (Buffer.byteLength(text, "utf8") > MAX_FILE_BYTES) return { unavailable: "too-large" };
     return looksBinary(text) ? { unavailable: "binary" } : { text };
   } catch {
     return { absent: true };
   }
+}
+
+function sideOfBlob(blob: Blob | undefined): SideRead | null {
+  if (!blob) return null;
+  if (blob.unavailable) return { unavailable: blob.unavailable };
+  return blob.text === undefined ? { absent: true } : { text: blob.text };
 }
 
 async function readWorkingTree(cwd: string, path: string): Promise<SideRead> {
@@ -92,8 +101,9 @@ async function readWorkingTree(cwd: string, path: string): Promise<SideRead> {
   }
 }
 
+/** Only the head of a file is worth sniffing; scanning a megabyte to find no NUL is waste. */
 function looksBinary(content: string): boolean {
-  return content.includes("\u0000");
+  return content.slice(0, 8 * 1024).includes("\u0000");
 }
 
 /**
@@ -115,31 +125,71 @@ export async function buildChangeSet(options: {
 
   // Omitting `...HEAD` compares against the working tree, so uncommitted work is included.
   const range = includeUncommitted ? [mergeBase] : [`${mergeBase}...HEAD`];
-  const raw = await git(root, ["diff", "--name-status", "-M", ...range]);
+  // --raw names the blob on each side, which is what lets every file be read from one
+  // process rather than one `git show` per side.
+  const raw = await git(root, ["diff", "--raw", "--no-abbrev", "-M", ...range]);
 
   const files: ChangedFile[] = [];
   const skipped: { path: string; reason: string }[] = [];
 
+  interface Entry {
+    path: string;
+    previousPath?: string;
+    changeType: ChangeType;
+    beforeOid?: string;
+    afterOid?: string;
+  }
+
+  const entries: Entry[] = [];
   for (const line of raw.split("\n")) {
     if (!line.trim()) continue;
-    const parts = line.split("\t");
-    const status = parts[0];
+    // :<srcMode> <dstMode> <srcOid> <dstOid> <status>\t<path>[\t<newPath>]
+    const [meta, ...paths] = line.split("\t");
+    const fields = (meta ?? "").replace(/^:/, "").split(/\s+/);
+    const [, , beforeOid, afterOid, status] = fields;
+    if (!status) continue;
+
     const changeType = parseChangeType(status);
-    const path = changeType === "rename" ? parts[2] : parts[1];
-    const previousPath = changeType === "rename" ? parts[1] : undefined;
+    const path = changeType === "rename" ? paths[1] : paths[0];
+    const previousPath = changeType === "rename" ? paths[0] : undefined;
     if (!path) continue;
 
+    entries.push({ path, previousPath, changeType, beforeOid, afterOid });
+  }
+
+  const blobs = await readBlobs(
+    root,
+    entries.flatMap((entry) => [
+      entry.changeType === "add" ? undefined : entry.beforeOid,
+      entry.changeType === "delete" || includeUncommitted ? undefined : entry.afterOid,
+    ]).filter((oid): oid is string => oid !== undefined),
+    MAX_FILE_BYTES,
+  );
+
+  // The working-tree side is not in git, so it is read from disk — concurrently, since
+  // a review of fifty files was otherwise fifty round trips in a row.
+  const sides = await mapWithConcurrency(entries, 8, async (entry) => {
     const beforeRead: SideRead =
-      changeType === "add" ? { absent: true } : await showAtCommit(root, mergeBase, previousPath ?? path);
+      entry.changeType === "add"
+        ? { absent: true }
+        : (isBlobOid(entry.beforeOid) ? sideOfBlob(blobs.get(entry.beforeOid)) : null) ??
+          (await showAtCommit(root, mergeBase, entry.previousPath ?? entry.path));
+
     const afterRead: SideRead =
-      changeType === "delete"
+      entry.changeType === "delete"
         ? { absent: true }
         : includeUncommitted
-          ? await readWorkingTree(root, path)
-          : await showAtCommit(root, "HEAD", path);
+          ? await readWorkingTree(root, entry.path)
+          : (isBlobOid(entry.afterOid) ? sideOfBlob(blobs.get(entry.afterOid)) : null) ??
+            (await showAtCommit(root, "HEAD", entry.path));
 
-    const before = sideOf(beforeRead);
-    const after = sideOf(afterRead);
+    return { beforeRead, afterRead };
+  });
+
+  for (const [index, entry] of entries.entries()) {
+    const { path, changeType, previousPath } = entry;
+    const before = sideOf(sides[index]!.beforeRead);
+    const after = sideOf(sides[index]!.afterRead);
 
     // A binary side cannot be diffed as text, so the file is skipped but named.
     if (before.unavailable === "binary" || after.unavailable === "binary") {

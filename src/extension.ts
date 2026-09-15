@@ -11,7 +11,8 @@ import { pruneOldClones, clearAllClones } from "./git/clone-store.js";
 import { parsePullRequestUrl, PullRequestUrlError } from "./ado/pr-url.js";
 import { buildSteps, ReviewSession, type Hunk } from "./session.js";
 import { buildSymbolGraph } from "./analysis/lsp-graph.js";
-import { orderFromGraph, type SymbolGraph } from "./analysis/flow-order.js";
+import { type SymbolGraph } from "./analysis/flow-order.js";
+import { flowOrder, signalsFor } from "./analysis/ordering-signals.js";
 import { hasEdges, textSymbolGraph } from "./analysis/text-graph.js";
 import { orderStepsWithModel } from "./lm/order-steps.js";
 import { pickModel, pickStructureModel, selectModel } from "./lm/select-model.js";
@@ -33,6 +34,8 @@ import { HunkLensProvider } from "./ui/hunk-lens.js";
 import { InlineExplainer } from "./ui/inline-explain.js";
 import { offerDiffCodeLens } from "./ui/code-lens-setting.js";
 import { StoryPanel } from "./ui/story-panel.js";
+import { ActivityStatus } from "./ui/activity-status.js";
+import { StoryStream } from "./lm/story-stream.js";
 import { writeStory } from "./lm/write-story.js";
 import { writeIntent } from "./lm/write-intent.js";
 import { assembleIntentText, renderIntentMarkdown } from "./lm/intent-prompt.js";
@@ -53,6 +56,7 @@ import {
 let session: ReviewSession | null = null;
 let graph: SymbolGraph = { references: new Map(), referencedBy: new Map(), resolved: false };
 let statusBar: vscode.StatusBarItem;
+let activity: ActivityStatus;
 let modelBar: vscode.StatusBarItem;
 let tree: StepTreeProvider;
 let treeView: vscode.TreeView<TreeNode>;
@@ -90,6 +94,9 @@ export function activate(context: vscode.ExtensionContext): void {
   gitLog = new GitLog();
   lenses = new HunkLensProvider();
   inlineExplainer = new InlineExplainer();
+  activity = new ActivityStatus();
+  inlineExplainer.reportTo(activity);
+  DiagramPanel.reportTo(activity);
   statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   statusBar.command = "prAnalyzer.next";
   // A second item names the model everything runs on, so the choice is visible and one click away.
@@ -99,6 +106,7 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     statusBar,
     modelBar,
+    activity,
     content,
     gitLog,
     gitLog.listen(),
@@ -321,7 +329,12 @@ async function load(
     { location: vscode.ProgressLocation.Notification, title: "PR Analyzer", cancellable: false },
     async (progress) => {
       try {
-        const changeSet = await fetch((message) => progress.report({ message }), tokens.token);
+        activity.start("review", "Reading the change…");
+        const changeSet = await fetch((message) => {
+          progress.report({ message });
+          activity.start("review", message);
+        }, tokens.token);
+        activity.done("review");
         if (!current()) return;
 
         if (changeSet.files.length === 0) {
@@ -335,49 +348,36 @@ async function load(
         // graph in the background below, off the critical path.
         const built = textSymbolGraph(changeSet.files);
 
-        const graphOrder = orderFromGraph(changeSet.files, built);
+        // The flow order, not the reference order: a utility everything calls has no
+        // inbound edges inside the change either, so counting edges alone cannot tell it
+        // apart from the task the platform actually invokes.
+        const graphOrder = flowOrder(signalsFor(changeSet.files));
 
-        let order = graphOrder.map((file) => ({ path: file, title: undefined as string | undefined }));
-        let note: string | undefined;
-
-        if (config.get<string>("ordering", "model") === "model") {
-          progress.report({ message: "Asking the model for the reading order…" });
-          const outcome = await orderStepsWithModel({
-            files: changeSet.files,
-            graph: built,
-            fallbackOrder: graphOrder,
-            token: tokens.token,
-          });
-          if (!current()) return;
-          order = outcome.steps;
-          note = outcome.note ?? note;
-        }
+        gitLog.note(
+          [
+            `change set: ${changeSet.files.length} file(s), ${changeSet.skipped.length} skipped`,
+            `reference edges: ${hasEdges(built) ? "yes" : "none, so the model decides the order"}`,
+            "reading order from the reference walk:",
+            ...graphOrder.map((path, index) => `  ${index + 1}. ${path}`),
+          ].join("\n"),
+        );
 
         graph = built;
-        setSession(new ReviewSession(changeSet, buildSteps(changeSet, order)));
+        setSession(
+          new ReviewSession(
+            changeSet,
+            buildSteps(
+              changeSet,
+              graphOrder.map((file) => ({ path: file })),
+            ),
+          ),
+        );
         content.setChangeSet(changeSet);
-
-        // The precise language-server graph resolves off the critical path; the
-        // on-demand diagram and read-through pick it up once it is ready.
-        void (async () => {
-          const lsp = await buildSymbolGraph(changeSet.repositoryRoot, changeSet.files, {
-            token: tokens.token,
-          });
-          if (!current() || !hasEdges(lsp)) return;
-          graph = lsp;
-        })();
 
         // Pick up where this exact change was last left, if it was seen before.
         const saved = loadCheckpoint(changeSet);
         if (saved && session) session.restore(saved);
 
-        if (note) {
-          void vscode.window
-            .showWarningMessage(`PR Analyzer: ${note}`, "Refresh")
-            .then((choice) => {
-              if (choice === "Refresh") void refresh();
-            });
-        }
         if (changeSet.skipped.length > 0) {
           void vscode.window.showWarningMessage(
             `${changeSet.skipped.length} file(s) skipped: ${changeSet.skipped
@@ -389,7 +389,70 @@ async function load(
 
         const start = session?.currentStep ?? session?.steps[0];
         if (start) await openStep(start.id);
+
+        // The model's reading order lands after the first paint rather than gating it.
+        if (config.get<string>("ordering", "model") === "model") {
+          // Said in the view rather than a toast: this list is not its final order yet.
+          treeView.message = "Working out the reading order…";
+          activity.start("order", "Working out the reading order and effort…");
+          void (async () => {
+            const outcome = await orderStepsWithModel({
+              files: changeSet.files,
+              graph: built,
+              fallbackOrder: graphOrder,
+              token: tokens.token,
+            });
+            activity.done("order");
+            if (!current()) return;
+            treeView.message = undefined;
+
+            // The walk follows real references, and on a change with edges it beats the
+            // model: it put a task's handler second where the model buried it twelfth and
+            // split a lifecycle across the list. So the code decides the order and the
+            // model decides what each step is called. With no edges to walk, its judgement
+            // is all there is.
+            const named = new Map(outcome.steps.map((step) => [step.path, step]));
+            const ordered = hasEdges(built)
+              ? graphOrder.map((path) => ({
+                  path,
+                  title: named.get(path)?.title,
+                  effort: named.get(path)?.effort,
+                }))
+              : outcome.steps;
+
+            gitLog.note(
+              [
+                `reading order applied, positions from ${hasEdges(built) ? "the reference walk" : "the model"}:`,
+                ...ordered.map((step, index) => `  ${index + 1}. ${step.path}`),
+              ].join("\n"),
+            );
+
+            applyReadingOrder(changeSet, ordered, Boolean(saved));
+
+            if (outcome.note) {
+              void vscode.window
+                .showWarningMessage(`PR Analyzer: ${outcome.note}`, "Refresh")
+                .then((choice) => {
+                  if (choice === "Refresh") void refresh();
+                });
+            }
+          })();
+        }
+
+        // The precise language-server graph resolves off the critical path; the
+        // on-demand diagram and read-through pick it up once it is ready.
+        void (async () => {
+          activity.start("graph", "Tracing what calls what…");
+          const lsp = await buildSymbolGraph(changeSet.repositoryRoot, changeSet.files, {
+            token: tokens.token,
+            onProgress: (message) => activity.start("graph", message),
+          });
+          activity.done("graph");
+          if (!current() || !hasEdges(lsp)) return;
+          graph = lsp;
+        })();
       } catch (error) {
+        activity.clear();
         if (!current()) return;
         setSession(null);
         const message =
@@ -411,10 +474,51 @@ async function load(
   );
 }
 
+/**
+ * Applies the reading order to what the reader has not opened yet.
+ *
+ * The order arrives after the first paint, so moving a file already on screen would pull
+ * the ground out from under whoever is reading it. But only this sitting counts: pinning
+ * the files a checkpoint remembered from days ago rebuilt a stale order on top of a
+ * correct one, which is how the teardown handler kept ending up last.
+ */
+function applyReadingOrder(
+  changeSet: ChangeSet,
+  proposed: NonNullable<Parameters<typeof buildSteps>[1]>,
+  resumed: boolean,
+): void {
+  const previous = session;
+  if (!previous || previous.changeSet !== changeSet) return;
+
+  // Opening the first step for the reader does not count as them opening it.
+  const pinned = previous.openedPaths();
+  const settled = pinned.length <= 1;
+
+  const byPath = new Map(proposed.map((entry) => [entry.path, entry]));
+  const order = settled
+    ? proposed
+    : [
+        ...pinned.map((path) => byPath.get(path) ?? { path }),
+        ...proposed.filter((entry) => !pinned.includes(entry.path)),
+      ];
+
+  const next = new ReviewSession(changeSet, buildSteps(changeSet, order));
+  next.restore({ currentPath: previous.currentPath(), visited: previous.visitedPaths() });
+  setSession(next);
+
+  // A fresh review opens wherever the flow now starts; a resumed one stays where it was.
+  if (settled && !resumed) {
+    const first = next.steps[0];
+    if (first) void openStep(first.id);
+  }
+}
+
 function setSession(next: ReviewSession | null): void {
   session = next;
   tree.setSession(next);
   lenses.setSession(next);
+  // Whatever the last review was waiting for, this one is not waiting for it.
+  treeView.message = undefined;
   // An explanation belongs to the change it described, not to whatever replaced it.
   inlineExplainer.clear();
   story = null;
@@ -637,27 +741,29 @@ async function showStory(regenerate: boolean): Promise<void> {
 
   let model = "";
   panel.busy("Reading the whole change…", model);
+  activity.start("story", "Reading the whole change…");
 
-  // A read-through spends a long silent stretch writing after it finishes reading; the
-  // character count turns that stretch into visible progress. A fresh lookup means it went
-  // back to reading, so the count restarts.
-  let writingChars = 0;
-  let shownAt = 0;
+  // Sections are posted as they finish, so the reader starts at the summary while the
+  // later steps are still being written.
+  const stream = new StoryStream(session.changeSet.files);
+  let written = 0;
 
   const outcome = await writeStory({
     steps: session.steps,
     files: session.changeSet.files,
     repositoryRoot: session.changeSet.repositoryRoot,
     onProgress: (message) => {
-      writingChars = 0;
-      shownAt = 0;
       panel.busy(message, model);
+      activity.start("story", message);
     },
     onText: (delta) => {
-      writingChars += delta.length;
-      if (writingChars >= 40 && writingChars - shownAt >= 200) {
-        shownAt = writingChars;
-        panel.busy(`Writing the read-through… (${writingChars.toLocaleString()} characters)`, model);
+      const next = stream.push(delta);
+      if (!next.summary && next.sections.length === 0) return;
+      panel.append(next.summary, next.sections);
+      written += next.sections.length;
+      if (written > 0) {
+        panel.busy(`Writing step ${written + 1}…`, model);
+        activity.start("story", `Writing step ${written + 1}…`);
       }
     },
     onModel: (name) => {
@@ -667,11 +773,14 @@ async function showStory(regenerate: boolean): Promise<void> {
     token: tokens.token,
   });
   clearExclusiveModelWork(tokens);
+  activity.done("story");
 
   if (outcome.story) {
     story = outcome.story;
     panel.show(outcome.story, model);
+    outcome.timer?.rendered();
   } else if (tokens.token.isCancellationRequested) {
+    outcome.timer?.cancelled();
     panel.failed("Stopped.");
   } else {
     panel.failed(outcome.reason ?? "The read-through could not be written.");

@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import type { ChangedFile, Step } from "../model/changeset.js";
 import { parseFirstJson } from "./json.js";
+import { ModelTimer } from "./lm-timing.js";
 import { runWithTools } from "./run-with-tools.js";
 import { selectModel } from "./select-model.js";
 import { buildStoryPrompt, parseStory, STORY_SYSTEM_PROMPT, validateStory, type Story } from "./story-prompt.js";
@@ -9,6 +10,8 @@ export interface StoryOutcome {
   story: Story | null;
   /** Why there is no story, in words worth showing a reader. */
   reason?: string;
+  /** Still open, so the caller can mark when the story reached the screen. */
+  timer?: ModelTimer;
 }
 
 export async function writeStory(input: {
@@ -20,8 +23,13 @@ export async function writeStory(input: {
   onModel?: (name: string) => void;
   token: vscode.CancellationToken;
 }): Promise<StoryOutcome> {
+  const timer = new ModelTimer("read-through");
   const model = await selectModel();
-  if (!model) return { story: null, reason: "No Copilot model is available." };
+  if (!model) {
+    timer.cancelled();
+    return { story: null, reason: "No Copilot model is available." };
+  }
+  timer.model(model.name);
   input.onModel?.(model.name);
 
   try {
@@ -35,16 +43,19 @@ export async function writeStory(input: {
       // The read-through spans every step, so it needs more headroom than a single explain.
       maxRounds: 12,
       maxCalls: 48,
+      timer,
       token: input.token,
     });
+    timer.lastToken(result.toolCalls);
 
     // The section format degrades gracefully; JSON stays as a fallback for a model that
     // still answers in the old shape.
     const story =
       parseStory(result.text, input.files) ??
       validateStory(parseFirstJson(result.text), input.files);
-    if (story) return { story };
+    if (story) return { story, timer };
 
+    timer.cancelled();
     return {
       story: null,
       reason: result.text.trim()
@@ -52,6 +63,7 @@ export async function writeStory(input: {
         : `${model.name} spent all its lookups without answering.`,
     };
   } catch (error) {
+    timer.cancelled();
     return {
       story: null,
       reason: `${model.name} failed: ${error instanceof Error ? error.message : String(error)}`,

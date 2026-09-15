@@ -29,8 +29,10 @@ const REQUIRED_CLAUSES = [
   // Shape constraints.
   "12 to 25 nodes",
   "diamonds with labelled edges",
-  // Output contract.
+  // Output contract. A fenced block, not JSON: it streams, and a closed fence is a far
+  // more robust success condition than a parsed object.
   'It must begin with "flowchart TD"',
+  "One fenced mermaid block",
   "Map as many as you can",
 ];
 

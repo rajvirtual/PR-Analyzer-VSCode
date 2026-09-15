@@ -101,6 +101,14 @@ export class StoryPanel {
     this.post({ type: "story", html: body(story), model });
   }
 
+  /** Sections that have finished, so the reader starts before the model stops writing. */
+  append(summary: string | undefined, sections: StorySection[]): void {
+    const html =
+      (summary ? `<p class="summary">${escape(summary)}</p>` : "") +
+      sections.map(section).join("");
+    if (html) this.post({ type: "append", html });
+  }
+
   private post(message: Record<string, unknown>): void {
     if (!this.disposed) void this.panel.webview.postMessage(message);
   }
@@ -173,10 +181,14 @@ function shell(): string {
     <button id="cancel" hidden>Stop</button>
     <span class="model" id="model"></span>
   </div>
-  <main id="content" aria-live="polite"><p class="waiting">Reading the whole change…</p></main>
+  <main id="main">
+    <div id="content" aria-live="polite"></div>
+    <p id="status" class="waiting">Reading the whole change…</p>
+  </main>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     const content = document.getElementById("content");
+    const status = document.getElementById("status");
     const modelLabel = document.getElementById("model");
     const regenerate = document.getElementById("regenerate");
     const cancel = document.getElementById("cancel");
@@ -185,13 +197,20 @@ function shell(): string {
     let ticker;
     let label = "Reading the whole change…";
 
-    // A line that never changes is indistinguishable from a hang, so it counts.
+    // A line that never changes is indistinguishable from a hang, so it counts. It sits
+    // below the sections rather than replacing them, which is what lets them stream in.
     function waiting() {
       const seconds = Math.round((Date.now() - started) / 1000);
-      const paragraph = document.createElement("p");
-      paragraph.className = "waiting";
-      paragraph.textContent = label + " — " + seconds + "s";
-      content.replaceChildren(paragraph);
+      status.textContent = label + " — " + seconds + "s";
+      status.hidden = false;
+    }
+
+    function stopTicking() {
+      if (ticker) window.clearInterval(ticker);
+      ticker = undefined;
+      status.hidden = true;
+      cancel.hidden = true;
+      regenerate.disabled = false;
     }
 
     function stopTicking() {
@@ -228,6 +247,9 @@ function shell(): string {
           ticker = window.setInterval(waiting, 1000);
         }
         waiting();
+      }
+      if (message.type === "append") {
+        content.insertAdjacentHTML("beforeend", message.html);
       }
       if (message.type === "story") {
         stopTicking();

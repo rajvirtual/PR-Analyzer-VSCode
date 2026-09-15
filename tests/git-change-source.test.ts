@@ -138,6 +138,42 @@ describe("buildChangeSet", () => {
   });
 });
 
+describe("renamed and binary files", () => {
+  it("follows a rename to the name it has now, and remembers the one it had", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "pr-analyzer-rename-"));
+    try {
+      const g = (...args: string[]): Promise<unknown> => run("git", args, { cwd: dir });
+      await g("init", "-b", "main");
+      await g("config", "user.email", "t@e.com");
+      await g("config", "user.name", "T");
+      await g("config", "commit.gpgsign", "false");
+      await writeFile(path.join(dir, "old-name.ts"), "export class Moved {}\n".repeat(6), "utf8");
+      await writeFile(path.join(dir, "pic.bin"), Buffer.from([0x00, 0x01, 0x02, 0x03]));
+      await g("add", ".");
+      await g("commit", "-m", "base");
+
+      await g("checkout", "-b", "feature");
+      await g("mv", "old-name.ts", "new-name.ts");
+      await writeFile(path.join(dir, "pic.bin"), Buffer.from([0x00, 0x09, 0x09, 0x09]));
+      await g("add", "-A");
+      await g("commit", "-m", "rename");
+
+      const set = await buildChangeSet({ cwd: dir, baseRef: "main" });
+      const renamed = set.files.find((file) => file.path === "new-name.ts");
+
+      expect(renamed).toMatchObject({ changeType: "rename", previousPath: "old-name.ts" });
+      // The before side is read from the old path's blob, not the new name.
+      expect(renamed?.before).toContain("Moved");
+
+      // A binary side is named as skipped rather than shown as an empty file.
+      expect(set.files.map((file) => file.path)).not.toContain("pic.bin");
+      expect(set.skipped).toContainEqual({ path: "pic.bin", reason: "binary" });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }, 30_000);
+});
+
 describe("unavailable sides", () => {
   it("marks an oversize working-tree edit as unavailable, not a deletion", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "pr-analyzer-big-"));

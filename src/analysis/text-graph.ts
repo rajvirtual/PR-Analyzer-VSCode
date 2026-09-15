@@ -1,6 +1,6 @@
 import type { ChangedFile } from "../model/changeset.js";
 import type { SymbolGraph } from "./flow-order.js";
-import { computeSignals } from "./ordering-signals.js";
+import { signalsFor } from "./ordering-signals.js";
 
 /**
  * A reference graph built from the text alone.
@@ -11,12 +11,7 @@ import { computeSignals } from "./ordering-signals.js";
  * baseline and the language server is an upgrade applied when it happens to be ready.
  */
 export function textSymbolGraph(files: ChangedFile[]): SymbolGraph {
-  const contents = new Map<string, string>();
-  for (const file of files) {
-    contents.set(file.path, file.after ?? file.before ?? "");
-  }
-
-  const signals = computeSignals(files, contents);
+  const signals = signalsFor(files);
   const references = new Map<string, Set<string>>();
   const referencedBy = new Map<string, Set<string>>();
   const declares = new Map<string, string[]>();

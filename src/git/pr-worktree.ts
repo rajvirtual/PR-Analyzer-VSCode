@@ -82,11 +82,25 @@ export async function createPullRequestWorktree(input: {
   }
 }
 
-async function removeWorktree(clone: string, target: string): Promise<void> {
+/** Asking first keeps a routine "nothing to remove" out of the log as a failure. */
+async function isWorktree(clone: string, target: string): Promise<boolean> {
   try {
-    await git(clone, ["worktree", "remove", "--force", target]);
+    const listed = await git(clone, ["worktree", "list", "--porcelain"]);
+    return listed
+      .split("\n")
+      .some((line) => line.startsWith("worktree ") && line.slice("worktree ".length).trim() === target);
   } catch {
-    // Nothing there, which is the state we wanted anyway.
+    return false;
+  }
+}
+
+async function removeWorktree(clone: string, target: string): Promise<void> {
+  if (await isWorktree(clone, target)) {
+    try {
+      await git(clone, ["worktree", "remove", "--force", target]);
+    } catch {
+      // Nothing there, which is the state we wanted anyway.
+    }
   }
   try {
     await git(clone, ["worktree", "prune"]);

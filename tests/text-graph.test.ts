@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ChangedFile } from "../src/model/changeset.js";
 import { hasEdges, textSymbolGraph } from "../src/analysis/text-graph.js";
-import { orderFromGraph } from "../src/analysis/flow-order.js";
+import { flowOrder, signalsFor } from "../src/analysis/ordering-signals.js";
 
 function file(path: string, after: string): ChangedFile {
   return { path, changeType: "edit", before: "", after };
@@ -37,7 +37,7 @@ describe("textSymbolGraph", () => {
       file("src/Naming.cs", "var x = EsPoolRoleRegistry.Lookup();"),
     ];
 
-    expect(orderFromGraph(files, textSymbolGraph(files))[0]).toBe("src/Naming.cs");
+    expect(flowOrder(signalsFor(files))[0]).toBe("src/Naming.cs");
   });
 });
 

@@ -136,6 +136,21 @@ describe("ReviewSession navigation", () => {
     expect(review.coverage().visited).toBe(0);
   });
 
+  // Re-ordering pins what the reader is looking at. A file remembered from a previous
+  // sitting is not that, and pinning it rebuilt a stale order over a corrected one.
+  it("separates what was opened now from what a checkpoint remembered", () => {
+    const review = session();
+    review.restore({ currentPath: "src/b.ts", visited: ["src/a.ts", "src/b.ts"] });
+
+    expect(review.visitedPaths()).toEqual(["src/a.ts", "src/b.ts"]);
+    expect(review.openedPaths()).toEqual([]);
+
+    review.selectStep(review.steps[0].id);
+    expect(review.openedPaths()).toEqual(["src/a.ts"]);
+    // The restored marks survive: they are what the reader has read, just not now.
+    expect(review.visitedPaths()).toEqual(["src/a.ts", "src/b.ts"]);
+  });
+
   it("advances to the next step once a file's changes run out", () => {
     const review = session();
     review.selectStep(review.steps[0].id);
