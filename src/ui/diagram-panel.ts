@@ -24,13 +24,12 @@ export interface DiagramCache {
 }
 
 /** Posts the rendered map to the pull request under review; resolves true once posted. */
-export type DiagramPublisher = (image: Uint8Array, mermaid: string) => Promise<boolean>;
+export type DiagramPublisher = (image: Uint8Array) => Promise<boolean>;
 
 interface PanelMessage {
   type: string;
   node?: string;
   image?: string;
-  mermaid?: string;
   reason?: string;
 }
 
@@ -185,7 +184,7 @@ export class DiagramPanel {
         );
         return;
       }
-      posted = await this.publisher(Buffer.from(message.image, "base64"), message.mermaid ?? "");
+      posted = await this.publisher(Buffer.from(message.image, "base64"));
     } finally {
       void this.panel.webview.postMessage({ type: "published", ok: posted });
     }

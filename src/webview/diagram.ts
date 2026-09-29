@@ -62,8 +62,6 @@ let svg: SVGSVGElement | null = null;
 let viewBox = { x: 0, y: 0, width: 0, height: 0 };
 let natural = { x: 0, y: 0, width: 0, height: 0 };
 let currentNode: string | null = null;
-/** What is on screen, so posting it sends the same map the reader is looking at. */
-let renderedDefinition = "";
 
 mermaid.registerLayoutLoaders(elk);
 
@@ -295,7 +293,6 @@ async function draw(definition: string): Promise<string> {
 async function render(definition: string): Promise<void> {
   surface.innerHTML = "";
   svg = null;
-  renderedDefinition = "";
   try {
     surface.innerHTML = await draw(definition);
   } catch (error) {
@@ -315,7 +312,6 @@ async function render(definition: string): Promise<void> {
   setIdle();
   svg = surface.querySelector("svg");
   if (!svg) return;
-  renderedDefinition = definition;
 
   svg.removeAttribute("width");
   svg.removeAttribute("height");
@@ -459,13 +455,10 @@ publishButton?.addEventListener("click", () => {
   publishButton.disabled = true;
   publishButton.textContent = "Posting…";
   toPng()
-    .then((image) =>
-      vscode.postMessage({ type: "publish", image, mermaid: renderedDefinition }),
-    )
+    .then((image) => vscode.postMessage({ type: "publish", image }))
     .catch((error: unknown) =>
       vscode.postMessage({
         type: "publish",
-        mermaid: renderedDefinition,
         reason: error instanceof Error ? error.message : String(error),
       }),
     );

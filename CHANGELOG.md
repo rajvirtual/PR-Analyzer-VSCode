@@ -2,6 +2,13 @@
 
 All notable changes to PR Analyzer are recorded here.
 
+## [0.5.9] - 2026-09-29
+
+### Changed
+- The map posted to a pull request ends with a link to AI PR Analyzer on the Marketplace, so
+  whoever reads the comment can use it too. The mermaid source is no longer included; the comment
+  is the image and the link.
+
 ## [0.5.8] - 2026-09-29
 
 ### Added

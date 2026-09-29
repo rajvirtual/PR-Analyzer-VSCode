@@ -207,8 +207,8 @@ move on. Continuing without a clone still works, with only the changed files.
 When you are reviewing a pull request, **Post to PR** on the map's toolbar posts the whole map —
 not just the part on screen — as a new comment on the pull request. The map is uploaded as a PNG
 attachment, since a detailed map can exceed the description's length limit and comments do not
-reliably render mermaid, and its mermaid source follows beneath it so it can be edited or
-redrawn. You are asked to confirm first. The button is not shown when reviewing a branch.
+reliably render mermaid. A link to AI PR Analyzer on the Marketplace follows beneath it, so
+whoever reads the comment can draw a map of their own. You are asked to confirm first. The button is not shown when reviewing a branch.
 
 ## When git goes wrong
 

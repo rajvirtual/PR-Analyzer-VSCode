@@ -760,7 +760,7 @@ function diagramPublisher(): DiagramPublisher | undefined {
   const source = lastSource;
   if (source?.kind !== "pull-request") return undefined;
   const label = session?.changeSet.label;
-  return (image, mermaid) => postDiagram(source.url, label, image, mermaid);
+  return (image) => postDiagram(source.url, label, image);
 }
 
 /**
@@ -771,7 +771,6 @@ async function postDiagram(
   url: string,
   label: string | undefined,
   image: Uint8Array,
-  mermaid: string,
 ): Promise<boolean> {
   const identity = parsePullRequestUrl(url);
   const choice = await vscode.window.showInformationMessage(
@@ -779,8 +778,8 @@ async function postDiagram(
     {
       modal: true,
       detail:
-        "The map is uploaded to the pull request as an image, with its mermaid source beneath " +
-        "it. Everyone who can see the pull request will see it.",
+        "The map is uploaded to the pull request as an image, with a link to AI PR Analyzer " +
+        "beneath it. Everyone who can see the pull request will see it.",
     },
     "Post",
   );
@@ -795,7 +794,7 @@ async function postDiagram(
           `pr-analyzer-map-${Date.now()}.png`,
           image,
         );
-        await createThread(identity, buildDiagramComment({ imageUrl, mermaid, label }));
+        await createThread(identity, buildDiagramComment({ imageUrl, label }));
         void vscode.window
           .showInformationMessage("Posted the map to the pull request.", "Open pull request")
           .then((opened) => {
