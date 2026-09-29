@@ -133,14 +133,21 @@ into a worktree of its own, removed when you move on. Your branch is never touch
 branch**, or press the button in the AI PR Analyzer view. Uncommitted work is included, so there
 is nothing to push or even commit first.
 
+**A workspace holding several repositories.** "This branch" is the one checked out in the
+repository of the file on screen. To switch without opening a file, run **AI PR Analyzer:
+Review a branch in another repository…** — the equivalent of `cd`-ing into it. It lists every
+repository in the workspace with its current branch, including repositories nested one level
+inside a workspace folder, and **Browse…** reaches any other folder on disk. Refresh and
+**Set the branch to compare against** stay on the repository you picked.
+
 Then, either way:
 
 1. Step through with `F7` and `Shift+F7`, or the chevrons on the Files view.
 2. Press the map icon to draw the diagram, or the book icon to read the change end to end.
 3. Press **Explain this** above any change, or ask `@pr /explain` in chat about what is on screen.
 
-**To review something else**, pick **Review a pull request by URL** or **Review this branch**
-again from the `…` menu at the top of the Files view. The new review replaces the old one, and
+**To review something else**, pick **Review a pull request by URL**, **Review this branch**, or
+**Review a branch in another repository…** from the `…` menu at the top of the Files view. The new review replaces the old one, and
 the previous worktree is removed. The heading beside **Files** names what you are reading.
 
 To read the whole repository rather than only the
@@ -161,6 +168,7 @@ move on. Continuing without a clone still works, with only the changed files.
 | Command | What it does |
 | --- | --- |
 | `AI PR Analyzer: Review this branch` | Reads your branch against its merge base |
+| `AI PR Analyzer: Review a branch in another repository…` | Picks a repository in the workspace, or any folder, and reviews its branch |
 | `AI PR Analyzer: Review a pull request by URL` | Reads an Azure DevOps pull request at its pinned commits |
 | `AI PR Analyzer: Read this change end to end` | Opens the read-through of the whole change |
 | `AI PR Analyzer: Map intent to evidence` | Lays each stated intent beside the files and tests that deliver it |
@@ -196,6 +204,12 @@ move on. Continuing without a clone still works, with only the changed files.
 | Zoom | `Ctrl`/`Cmd` and the wheel, or the **+** and **&minus;** buttons |
 | Pan | Drag the diagram itself |
 
+When you are reviewing a pull request, **Post to PR** on the map's toolbar posts the whole map —
+not just the part on screen — as a new comment on the pull request. The map is uploaded as a PNG
+attachment, since a detailed map can exceed the description's length limit and comments do not
+reliably render mermaid, and its mermaid source follows beneath it so it can be edited or
+redrawn. You are asked to confirm first. The button is not shown when reviewing a branch.
+
 ## When git goes wrong
 
 Every git command is recorded, with the folder it ran in, how long it took, and what
@@ -212,8 +226,9 @@ The extension talks to two services, both with your existing credentials:
   model then asks to read, and — for the intent map — the pull request's description and linked
   work item titles, or the branch's commit subjects.
 - **Azure DevOps**, when you review a pull request by URL, to fetch that pull request's files
-  and, if you map its intent, its description and linked work items; and when you add a review
-  note, to post that comment back to the pull request. VS Code's own Microsoft sign-in is used,
+  and, if you map its intent, its description and linked work items; when you add a review
+  note, to post that comment back to the pull request; and when you press **Post to PR** on the
+  map, to upload the map as an image attachment and post a comment showing it. VS Code's own Microsoft sign-in is used,
   or a token you supplied.
 
 Nothing is sent anywhere else, and nothing is written outside VS Code's own storage.

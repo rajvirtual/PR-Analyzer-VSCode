@@ -4,10 +4,12 @@ import type { ChangeSet } from "./model/changeset.js";
 import { buildChangeSet, GitError } from "./git/git-change-source.js";
 import { runGit } from "./git/run-git.js";
 import { buildPullRequestChangeSet, fetchPullRequestIntent, AdoError } from "./ado/ado-change-source.js";
-import { createThread } from "./ado/pr-threads.js";
+import { createThread, uploadAttachment } from "./ado/pr-threads.js";
+import { buildDiagramComment } from "./ado/diagram-comment.js";
 import { createPullRequestWorktree, type Worktree } from "./git/pr-worktree.js";
 import { addRepositoryFolder, findLocalClone, offerToClone } from "./git/find-clone.js";
 import { pruneOldClones, clearAllClones } from "./git/clone-store.js";
+import { listRepositories, pickRepository } from "./git/repository-picker.js";
 import { parsePullRequestUrl, PullRequestUrlError } from "./ado/pr-url.js";
 import { buildSteps, ReviewSession, type Hunk } from "./session.js";
 import { buildSymbolGraph } from "./analysis/lsp-graph.js";
@@ -41,7 +43,7 @@ import { writeIntent } from "./lm/write-intent.js";
 import { assembleIntentText, renderIntentMarkdown } from "./lm/intent-prompt.js";
 import type { Story } from "./lm/story-prompt.js";
 import { initialiseAdoAuth, signIn, signOut } from "./ado/ado-auth.js";
-import { DiagramPanel } from "./ui/diagram-panel.js";
+import { DiagramPanel, type DiagramPublisher } from "./ui/diagram-panel.js";
 import { registerChatParticipant } from "./chat/participant.js";
 import { initialiseModelMemory } from "./lm/model-memory.js";
 import { Generation } from "./review/generation.js";
@@ -119,6 +121,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.workspace.registerTextDocumentContentProvider(BEFORE_SCHEME, content),
     vscode.workspace.registerTextDocumentContentProvider(AFTER_SCHEME, content),
     vscode.commands.registerCommand("prAnalyzer.reviewBranch", reviewBranch),
+    vscode.commands.registerCommand("prAnalyzer.reviewRepository", reviewRepository),
     vscode.commands.registerCommand("prAnalyzer.reviewPullRequest", reviewPullRequest),
     vscode.commands.registerCommand("prAnalyzer.refresh", refresh),
     vscode.commands.registerCommand("prAnalyzer.openStep", openStep),
@@ -164,18 +167,38 @@ async function discardWorktree(): Promise<void> {
   await previous?.dispose();
 }
 
-function workspaceFolder(): string | null {
-  const folders = vscode.workspace.workspaceFolders;
-  if (!folders || folders.length === 0) return null;
-  const active = vscode.window.activeTextEditor?.document.uri;
-  if (active) {
-    const owner = vscode.workspace.getWorkspaceFolder(active);
-    if (owner) return owner.uri.fsPath;
-  }
-  return folders[0].uri.fsPath;
+function isInside(parent: string, child: string): boolean {
+  const relative = path.relative(parent, child);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
-let lastSource: { kind: "branch" } | { kind: "pull-request"; url: string } | null = null;
+/**
+ * Where "this branch" lives: the repository of the file on screen, so a workspace holding
+ * several repositories reviews the one being read. Failing that, the repository reviewed
+ * last, the only one there is, or — when there are several — the reader's pick.
+ *
+ * Resolves to undefined when the reader cancels that pick, and to null when no folder is open.
+ */
+async function branchFolder(): Promise<string | null | undefined> {
+  const active = vscode.window.activeTextEditor?.document.uri;
+  if (
+    active?.scheme === "file" &&
+    vscode.workspace.getWorkspaceFolder(active) &&
+    // A pull request's worktree is not a branch of yours.
+    !isInside(storageUri.fsPath, active.fsPath)
+  ) {
+    return path.dirname(active.fsPath);
+  }
+  if (lastSource?.kind === "branch") return lastSource.cwd;
+
+  const repositories = await listRepositories();
+  if (repositories.length === 1) return repositories[0]!.root;
+  if (repositories.length > 1) return pickRepository();
+  return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null;
+}
+
+let lastSource: { kind: "branch"; cwd: string } | { kind: "pull-request"; url: string } | null =
+  null;
 
 async function refresh(): Promise<void> {
   const source = lastSource;
@@ -184,6 +207,10 @@ async function refresh(): Promise<void> {
     // rather than falling back to only the changed files.
     await discardWorktree();
     await load(pullRequestFetch(source.url));
+    return;
+  }
+  if (source?.kind === "branch") {
+    await reviewBranchAt(source.cwd);
     return;
   }
   await reviewBranch();
@@ -237,14 +264,26 @@ async function toggleFilesView(): Promise<void> {
 }
 
 async function reviewBranch(): Promise<void> {
-  const cwd = workspaceFolder();
+  const cwd = await branchFolder();
+  if (cwd === undefined) return;
   if (!cwd) {
     void vscode.window.showErrorMessage("Open a folder before reviewing a branch.");
     return;
   }
+  await reviewBranchAt(cwd);
+}
 
+/** Switches to another repository in the workspace, or anywhere on disk, and reviews its branch. */
+async function reviewRepository(): Promise<void> {
+  const current = lastSource?.kind === "branch" ? lastSource.cwd : undefined;
+  const cwd = await pickRepository(current);
+  if (!cwd) return;
+  await reviewBranchAt(cwd);
+}
+
+async function reviewBranchAt(cwd: string): Promise<void> {
   const config = vscode.workspace.getConfiguration("prAnalyzer");
-  lastSource = { kind: "branch" };
+  lastSource = { kind: "branch", cwd };
   await discardWorktree();
 
   await load(() =>
@@ -708,8 +747,69 @@ function showDiagram(): void {
         if (session) saveDiagram(session.changeSet, diagram);
       },
     },
+    diagramPublisher(),
   );
   DiagramPanel.highlight(session.currentStep?.id ?? null);
+}
+
+/**
+ * Posting belongs to the pull request the map was drawn for, captured now, so a review
+ * started later cannot redirect it.
+ */
+function diagramPublisher(): DiagramPublisher | undefined {
+  const source = lastSource;
+  if (source?.kind !== "pull-request") return undefined;
+  const label = session?.changeSet.label;
+  return (image, mermaid) => postDiagram(source.url, label, image, mermaid);
+}
+
+/**
+ * Posts the map as its own comment. A description has a length limit a detailed map can
+ * exceed, and a comment keeps the map beside the discussion it prompts.
+ */
+async function postDiagram(
+  url: string,
+  label: string | undefined,
+  image: Uint8Array,
+  mermaid: string,
+): Promise<boolean> {
+  const identity = parsePullRequestUrl(url);
+  const choice = await vscode.window.showInformationMessage(
+    `Post this map as a comment on pull request ${identity.pullRequestId}?`,
+    {
+      modal: true,
+      detail:
+        "The map is uploaded to the pull request as an image, with its mermaid source beneath " +
+        "it. Everyone who can see the pull request will see it.",
+    },
+    "Post",
+  );
+  if (choice !== "Post") return false;
+
+  return vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: "PR Analyzer: posting the map…" },
+    async () => {
+      try {
+        const imageUrl = await uploadAttachment(
+          identity,
+          `pr-analyzer-map-${Date.now()}.png`,
+          image,
+        );
+        await createThread(identity, buildDiagramComment({ imageUrl, mermaid, label }));
+        void vscode.window
+          .showInformationMessage("Posted the map to the pull request.", "Open pull request")
+          .then((opened) => {
+            if (opened) void vscode.env.openExternal(vscode.Uri.parse(url));
+          });
+        return true;
+      } catch (error) {
+        void vscode.window.showErrorMessage(
+          `PR Analyzer: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        return false;
+      }
+    },
+  );
 }
 
 async function showStory(regenerate: boolean): Promise<void> {
@@ -922,5 +1022,6 @@ async function setBaseRef(): Promise<void> {
   });
   if (value === undefined) return;
   await config.update("baseRef", value, vscode.ConfigurationTarget.Workspace);
-  await reviewBranch();
+  if (lastSource?.kind === "branch") await reviewBranchAt(lastSource.cwd);
+  else await reviewBranch();
 }

@@ -2,6 +2,7 @@ import type { ChangeSet, ChangedFile, ChangeType, SideUnavailable } from "../mod
 import { mapWithConcurrency } from "../analysis/concurrency.js";
 import { isBlobOid, readBlobs, type Blob } from "./cat-file.js";
 import { runGitRaw } from "./run-git.js";
+import { basename } from "node:path";
 
 /** Large enough for a source file, small enough that a stray blob cannot stall the UI. */
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
@@ -219,7 +220,8 @@ export async function buildChangeSet(options: {
 
   return {
     repositoryRoot: root,
-    label: `${branch} vs ${baseRef}`,
+    // Named for its repository too, since a workspace can hold several.
+    label: `${basename(root)}: ${branch} vs ${baseRef}`,
     baseRef,
     mergeBase,
     files,

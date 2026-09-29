@@ -27,6 +27,7 @@ const overlayDetail = document.getElementById("overlay-detail") as HTMLElement;
 const overlaySource = document.getElementById("overlay-source") as HTMLPreElement;
 
 const modelButton = document.getElementById("model") as HTMLButtonElement;
+const publishButton = document.getElementById("publish") as HTMLButtonElement;
 
 let startedAt = 0;
 let ticker: number | undefined;
@@ -61,6 +62,8 @@ let svg: SVGSVGElement | null = null;
 let viewBox = { x: 0, y: 0, width: 0, height: 0 };
 let natural = { x: 0, y: 0, width: 0, height: 0 };
 let currentNode: string | null = null;
+/** What is on screen, so posting it sends the same map the reader is looking at. */
+let renderedDefinition = "";
 
 mermaid.registerLayoutLoaders(elk);
 
@@ -291,6 +294,8 @@ async function draw(definition: string): Promise<string> {
 
 async function render(definition: string): Promise<void> {
   surface.innerHTML = "";
+  svg = null;
+  renderedDefinition = "";
   try {
     surface.innerHTML = await draw(definition);
   } catch (error) {
@@ -310,6 +315,7 @@ async function render(definition: string): Promise<void> {
   setIdle();
   svg = surface.querySelector("svg");
   if (!svg) return;
+  renderedDefinition = definition;
 
   svg.removeAttribute("width");
   svg.removeAttribute("height");
@@ -403,6 +409,68 @@ document
   .getElementById("model")
   ?.addEventListener("click", () => vscode.postMessage({ type: "pickModel" }));
 
+/** The page's own background, so the dark-themed map stays legible wherever it lands. */
+const IMAGE_BACKGROUND = "#0d1117";
+
+/**
+ * The whole map as a PNG, base64 encoded.
+ *
+ * It is drawn from the full extent rather than the viewBox, so the image holds everything
+ * whatever the reader has zoomed to. Labels are SVG text, not HTML, so the canvas is never
+ * tainted and can be read back.
+ */
+async function toPng(): Promise<string> {
+  if (!svg || natural.width <= 0 || natural.height <= 0) throw new Error("Nothing is drawn yet.");
+
+  const { x, y, width, height } = natural;
+  // Crisp at twice the size, within what a canvas can hold.
+  const scale = Math.min(2, 16_000 / Math.max(width, height), Math.sqrt(40_000_000 / (width * height)));
+  const pixelWidth = Math.max(1, Math.round(width * scale));
+  const pixelHeight = Math.max(1, Math.round(height * scale));
+
+  const clone = svg.cloneNode(true) as SVGSVGElement;
+  for (const node of clone.querySelectorAll(".pr-current")) node.classList.remove("pr-current");
+  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  clone.setAttribute("viewBox", `${x} ${y} ${width} ${height}`);
+  clone.setAttribute("width", String(pixelWidth));
+  clone.setAttribute("height", String(pixelHeight));
+  const markup = new XMLSerializer().serializeToString(clone);
+
+  const image = new Image();
+  await new Promise<void>((resolve, reject) => {
+    image.onload = () => resolve();
+    image.onerror = () => reject(new Error("The browser could not load the diagram as an image."));
+    image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`;
+  });
+
+  const canvas = document.createElement("canvas");
+  canvas.width = pixelWidth;
+  canvas.height = pixelHeight;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("No canvas is available to draw the image on.");
+  context.fillStyle = IMAGE_BACKGROUND;
+  context.fillRect(0, 0, pixelWidth, pixelHeight);
+  context.drawImage(image, 0, 0, pixelWidth, pixelHeight);
+  return canvas.toDataURL("image/png").replace(/^data:image\/png;base64,/, "");
+}
+
+publishButton?.addEventListener("click", () => {
+  if (publishButton.disabled) return;
+  publishButton.disabled = true;
+  publishButton.textContent = "Posting…";
+  toPng()
+    .then((image) =>
+      vscode.postMessage({ type: "publish", image, mermaid: renderedDefinition }),
+    )
+    .catch((error: unknown) =>
+      vscode.postMessage({
+        type: "publish",
+        mermaid: renderedDefinition,
+        reason: error instanceof Error ? error.message : String(error),
+      }),
+    );
+});
+
 findBox?.addEventListener("input", () => {
   const query = findBox.value.trim().toLowerCase();
   if (!svg || !query) return;
@@ -426,6 +494,8 @@ window.addEventListener("message", (event) => {
     node?: string;
     text?: string;
     detail?: string;
+    value?: boolean;
+    ok?: boolean;
   };
   if (message.type === "render" && message.definition) {
     void render(message.definition);
@@ -439,6 +509,12 @@ window.addEventListener("message", (event) => {
   }
   if (message.type === "model" && message.text) modelButton.textContent = message.text;
   if (message.type === "highlight") highlight(message.node ?? null);
+  if (message.type === "canPublish") publishButton.hidden = !message.value;
+  if (message.type === "published") {
+    publishButton.disabled = false;
+    publishButton.textContent = message.ok ? "Posted ✓" : "Post to PR";
+    if (message.ok) window.setTimeout(() => (publishButton.textContent = "Post to PR"), 4000);
+  }
   if (message.type === "status" && message.text) {
     setIdle();
     status.textContent = message.text;

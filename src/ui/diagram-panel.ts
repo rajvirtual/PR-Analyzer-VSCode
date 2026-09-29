@@ -23,6 +23,17 @@ export interface DiagramCache {
   save(diagram: DrawnDiagram): void;
 }
 
+/** Posts the rendered map to the pull request under review; resolves true once posted. */
+export type DiagramPublisher = (image: Uint8Array, mermaid: string) => Promise<boolean>;
+
+interface PanelMessage {
+  type: string;
+  node?: string;
+  image?: string;
+  mermaid?: string;
+  reason?: string;
+}
+
 export class DiagramPanel {
   private static current: DiagramPanel | undefined;
   private static activity: ActivityStatus | undefined;
@@ -52,6 +63,7 @@ export class DiagramPanel {
     private repositoryRoot: string,
     private readonly onSelect: (stepId: string) => void,
     private readonly cache: DiagramCache,
+    private publisher: DiagramPublisher | undefined,
   ) {
     this.drawn = this.cache.load() ?? null;
     this.panel = vscode.window.createWebviewPanel(
@@ -67,9 +79,7 @@ export class DiagramPanel {
     );
 
     this.panel.webview.html = this.html();
-    this.panel.webview.onDidReceiveMessage((message: { type: string; node?: string }) =>
-      this.onMessage(message),
-    );
+    this.panel.webview.onDidReceiveMessage((message: PanelMessage) => this.onMessage(message));
     this.panel.onDidDispose(() => {
       this.disposed = true;
       // A closed map has nothing to draw for; stop any model call still running.
@@ -106,9 +116,10 @@ export class DiagramPanel {
     repositoryRoot: string,
     onSelect: (stepId: string) => void,
     cache: DiagramCache,
+    publisher?: DiagramPublisher,
   ): DiagramPanel {
     if (DiagramPanel.current) {
-      DiagramPanel.current.update(steps, files, graph, repositoryRoot);
+      DiagramPanel.current.update(steps, files, graph, repositoryRoot, publisher);
       DiagramPanel.current.panel.reveal();
       return DiagramPanel.current;
     }
@@ -120,6 +131,7 @@ export class DiagramPanel {
       repositoryRoot,
       onSelect,
       cache,
+      publisher,
     );
     return DiagramPanel.current;
   }
@@ -139,21 +151,55 @@ export class DiagramPanel {
     if (node) void panel.panel.webview.postMessage({ type: "highlight", node });
   }
 
-  update(steps: Step[], files: ChangedFile[], graph: SymbolGraph, repositoryRoot: string): void {
+  update(
+    steps: Step[],
+    files: ChangedFile[],
+    graph: SymbolGraph,
+    repositoryRoot: string,
+    publisher?: DiagramPublisher,
+  ): void {
     this.steps = steps;
     this.files = files;
     this.graph = graph;
     this.repositoryRoot = repositoryRoot;
+    this.publisher = publisher;
+    this.announcePublisher();
     this.drawn = this.cache.load() ?? null;
     this.drawGeneration += 1;
     void this.push();
   }
 
-  private onMessage(message: { type: string; node?: string }): void {
+  /** The post button only makes sense when the review has a pull request behind it. */
+  private announcePublisher(): void {
+    if (!this.ready) return;
+    void this.panel.webview.postMessage({ type: "canPublish", value: Boolean(this.publisher) });
+  }
+
+  private async publish(message: PanelMessage): Promise<void> {
+    let posted = false;
+    try {
+      if (!this.publisher) return;
+      if (!message.image) {
+        void vscode.window.showErrorMessage(
+          `PR Analyzer: the map could not be turned into an image. ${message.reason ?? ""}`.trim(),
+        );
+        return;
+      }
+      posted = await this.publisher(Buffer.from(message.image, "base64"), message.mermaid ?? "");
+    } finally {
+      void this.panel.webview.postMessage({ type: "published", ok: posted });
+    }
+  }
+
+  private onMessage(message: PanelMessage): void {
     switch (message.type) {
       case "ready":
         this.ready = true;
+        this.announcePublisher();
         void this.push();
+        return;
+      case "publish":
+        void this.publish(message);
         return;
       case "toggleDirection":
         this.direction = this.direction === "TD" ? "LR" : "TD";
@@ -396,6 +442,7 @@ export class DiagramPanel {
     <button id="direction" title="Vertical or horizontal">Direction</button>
     <button id="redraw" title="Draw it again">Redraw</button>
     <button id="model" title="Choose the model that draws this">Model</button>
+    <button id="publish" hidden title="Post this map to the pull request as a comment">Post to PR</button>
     <input id="find" type="search" placeholder="Find…" size="16">
     <div id="legend">
       <span><i class="swatch new"></i>new</span>

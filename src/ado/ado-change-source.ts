@@ -28,7 +28,7 @@ export async function request(
   query: Record<string, string>,
   accept: "json" | "text",
   signal?: AbortSignal,
-  init?: { method?: string; body?: string },
+  init?: { method?: string; body?: string | Uint8Array; contentType?: string },
 ): Promise<Response> {
   const target = new URL(url);
   for (const [name, value] of Object.entries(query)) target.searchParams.set(name, value);
@@ -39,7 +39,9 @@ export async function request(
     headers: {
       Authorization: await authorization(true),
       Accept: accept === "json" ? "application/json" : "text/plain",
-      ...(init?.body === undefined ? {} : { "Content-Type": "application/json" }),
+      ...(init?.body === undefined
+        ? {}
+        : { "Content-Type": init.contentType ?? "application/json" }),
     },
     body: init?.body,
     signal,

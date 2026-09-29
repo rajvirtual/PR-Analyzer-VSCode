@@ -2,6 +2,21 @@
 
 All notable changes to PR Analyzer are recorded here.
 
+## [0.5.8] - 2026-09-29
+
+### Added
+- **Review a branch in another repository…** — for a workspace holding several repositories, pick
+  one (or browse to any folder) and review its checked-out branch. Refresh and the base branch
+  setting stay on the chosen repository.
+- **Post to PR** on the map — posts the whole map to the pull request as a comment: a PNG
+  attachment, with the mermaid source beneath it. For maps too large for the description.
+
+### Changed
+- **Review this branch** reviews the repository of the file on screen, so a repository nested
+  inside a workspace folder is reviewed rather than the folder's. With several repositories and
+  no file open, it asks which one.
+- A branch review is labelled with its repository name as well as the branch.
+
 ## [0.5.1] - 2026-09-12
 
 ### Changed

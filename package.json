@@ -2,7 +2,7 @@
   "name": "pr-analyzer",
   "displayName": "AI PR Analyzer",
   "description": "Walk a large change in execution order: ordered steps, native diffs, and a map of how the files connect",
-  "version": "0.5.7",
+  "version": "0.5.8",
   "publisher": "rajeshvijay",
   "private": true,
   "license": "MIT",
@@ -81,7 +81,7 @@
     "viewsWelcome": [
       {
         "view": "prAnalyzer.files",
-        "contents": "Review the changes on this branch, ordered so they read as a flow.\n[Review this branch](command:prAnalyzer.reviewBranch)\nOr review a pull request that is not checked out.\n[Review a pull request](command:prAnalyzer.reviewPullRequest)"
+        "contents": "Review the changes on this branch, ordered so they read as a flow.\n[Review this branch](command:prAnalyzer.reviewBranch)\nWorkspace holds several repositories? Pick the one to review.\n[Review a branch in another repository](command:prAnalyzer.reviewRepository)\nOr review a pull request that is not checked out.\n[Review a pull request](command:prAnalyzer.reviewPullRequest)"
       }
     ],
     "commands": [
@@ -90,6 +90,12 @@
         "title": "Review this branch",
         "category": "AI PR Analyzer",
         "icon": "$(play)"
+      },
+      {
+        "command": "prAnalyzer.reviewRepository",
+        "title": "Review a branch in another repository…",
+        "category": "AI PR Analyzer",
+        "icon": "$(repo)"
       },
       {
         "command": "prAnalyzer.reviewPullRequest",
@@ -266,6 +272,11 @@
           "command": "prAnalyzer.reviewBranch",
           "when": "view == prAnalyzer.files",
           "group": "1_review@2"
+        },
+        {
+          "command": "prAnalyzer.reviewRepository",
+          "when": "view == prAnalyzer.files",
+          "group": "1_review@3"
         },
         {
           "command": "prAnalyzer.showStory",
