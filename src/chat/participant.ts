@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { toolRoots } from "../model/components.js";
 import type { ReviewSession } from "../session.js";
 import { buildExplainPrompt } from "../lm/explain-prompt.js";
 import { runWithTools } from "../lm/run-with-tools.js";
@@ -58,6 +59,7 @@ export function registerChatParticipant(
           context: {
             repositoryRoot: session.changeSet.repositoryRoot,
             files: session.changeSet.files,
+            components: toolRoots(session.changeSet),
           },
           prompt,
           history: priorTurns(chatContext),

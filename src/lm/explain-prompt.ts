@@ -109,7 +109,9 @@ export function buildExplainPrompt(input: {
     .join("\n");
 
   const parts = [
-    `Repository: ${changeSet.repositoryRoot}`,
+    changeSet.components?.length
+      ? `Repositories, each a path prefix: ${changeSet.components.map((component) => component.name).join(", ")}`
+      : `Repository: ${changeSet.repositoryRoot}`,
     `Branch: ${changeSet.label}`,
     `File: ${file.path} (${file.changeType})`,
     "",

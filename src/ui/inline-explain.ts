@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { toChangePath, toolRoots } from "../model/components.js";
 import type { Hunk, ReviewSession } from "../session.js";
 import { buildExplainPrompt } from "../lm/explain-prompt.js";
 import { ModelTimer } from "../lm/lm-timing.js";
@@ -39,7 +40,7 @@ export class InlineExplainer {
   ): Promise<void> {
     const file = matchChangedFile(
       session.changeSet.files,
-      uri.scheme === "file" ? uri.fsPath : uri.path,
+      uri.scheme === "file" ? toChangePath(session.changeSet, uri.fsPath) : uri.path,
     );
     if (!file) return;
 
@@ -63,6 +64,7 @@ export class InlineExplainer {
         context: {
           repositoryRoot: session.changeSet.repositoryRoot,
           files: session.changeSet.files,
+          components: toolRoots(session.changeSet),
         },
         // runWithTools supplies the explain rules; sending them again only pays twice.
         prompt: buildExplainPrompt({ changeSet: session.changeSet, file, hunk }),

@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import type { ChangedFile } from "../model/changeset.js";
 import { runGitRaw } from "../git/run-git.js";
 import { containedPath, isUnder, realpathWithin } from "./safe-path.js";
+import type { ToolRoot } from "../model/components.js";
 
 /**
  * Where the tools read from.
@@ -12,6 +13,28 @@ import { containedPath, isUnder, realpathWithin } from "./safe-path.js";
 export interface ToolContext {
   repositoryRoot: string;
   files: ChangedFile[];
+  /**
+   * Set for a review spanning several repositories. Paths then carry the component's
+   * name as their first segment, and each tool routes to that component's checkout.
+   */
+  components?: ToolRoot[];
+}
+
+/** A component-prefixed path, as the single-repository context that can read it. */
+function routed(context: ToolContext, requested: string): { context: ToolContext; path: string } {
+  if (!context.components?.length) return { context, path: requested };
+  const normalised = requested.replace(/^\/+/, "");
+  for (const component of context.components) {
+    const prefix = `${component.name}/`;
+    if (normalised.startsWith(prefix)) {
+      return {
+        context: { repositoryRoot: component.root, files: [] },
+        path: normalised.slice(prefix.length),
+      };
+    }
+  }
+  // Not naming a component, it cannot be resolved to a checkout.
+  return { context: { repositoryRoot: "", files: [] }, path: normalised };
 }
 
 /** Enough for a class, short enough that one call cannot swallow the context window. */
@@ -89,6 +112,11 @@ function clamp(text: string): string {
 async function readLines(context: ToolContext, requested: string): Promise<string[] | null> {
   const fromChange = context.files.find((file) => file.path === requested);
   if (fromChange?.after) return fromChange.after.split("\n");
+  if (context.components?.length) {
+    const target = routed(context, requested);
+    if (!target.context.repositoryRoot) return fromChange?.before?.split("\n") ?? null;
+    return readLines(target.context, target.path);
+  }
   if (!context.repositoryRoot) return fromChange?.before?.split("\n") ?? null;
 
   // A model-supplied path is refused before any read if it leaves the repository,
@@ -110,8 +138,23 @@ function numbered(lines: string[], firstLine: number): string {
   return lines.map((line, index) => `${firstLine + index} | ${line}`).join("\n");
 }
 
+/** Each checkout a feature review can read, with the name its paths are prefixed by. */
+function checkouts(context: ToolContext): ToolRoot[] {
+  if (context.components?.length) return context.components.filter((component) => component.root);
+  return context.repositoryRoot ? [{ name: "", root: context.repositoryRoot }] : [];
+}
+
+/** A path named the way the change names it: prefixed by its component in a feature. */
+function changeRelative(owner: ToolRoot, fsPath: string): string {
+  const relative = vscode.workspace.asRelativePath(fsPath, false);
+  if (!owner.name) return relative;
+  const local = fsPath.slice(owner.root.length).replace(/^[\\/]+/, "").replace(/\\/g, "/");
+  return `${owner.name}/${local}`;
+}
+
 async function findSymbol(context: ToolContext, name: string): Promise<ToolRun> {
-  if (!context.repositoryRoot) {
+  const roots = checkouts(context);
+  if (roots.length === 0) {
     return {
       label: `cannot look up ${name} without a checkout`,
       text: `Finding "${name}" needs the repository checked out. Only the changed files are available here.`,
@@ -124,10 +167,10 @@ async function findSymbol(context: ToolContext, name: string): Promise<ToolRun> 
       name,
     )) ?? [];
 
-  // A symbol from another open folder is out of bounds: keep only this repository's.
-  const inRepo = symbols.filter((symbol) =>
-    isUnder(context.repositoryRoot, symbol.location.uri.fsPath),
-  );
+  // A symbol from another open folder is out of bounds: keep only this change's repositories.
+  const ownerOf = (fsPath: string): ToolRoot | undefined =>
+    roots.find((candidate) => isUnder(candidate.root, fsPath));
+  const inRepo = symbols.filter((symbol) => ownerOf(symbol.location.uri.fsPath));
   const exact = inRepo.filter((symbol) => symbol.name === name);
   const matches = (exact.length > 0 ? exact : inRepo).slice(0, MAX_SYMBOL_MATCHES);
 
@@ -141,7 +184,10 @@ async function findSymbol(context: ToolContext, name: string): Promise<ToolRun> 
   const sections: string[] = [];
   const consulted: string[] = [];
   for (const match of matches) {
-    const relative = vscode.workspace.asRelativePath(match.location.uri, false);
+    const owner = ownerOf(match.location.uri.fsPath);
+    const relative = owner
+      ? changeRelative(owner, match.location.uri.fsPath)
+      : vscode.workspace.asRelativePath(match.location.uri, false);
     const document = await vscode.workspace.openTextDocument(match.location.uri).then(
       (open) => open,
       () => null,
@@ -191,6 +237,7 @@ async function searchText(
   context: ToolContext,
   input: { query: string; glob?: string },
 ): Promise<ToolRun> {
+  if (context.components?.length) return searchComponents(context, input);
   if (!context.repositoryRoot) {
     // No checkout: search what the change contains rather than claim a repo-wide answer.
     const matches: string[] = [];
@@ -236,6 +283,42 @@ async function searchText(
   }
 }
 
+/** Searches every component: its checkout when it has one, its changed files otherwise. */
+async function searchComponents(
+  context: ToolContext,
+  input: { query: string; glob?: string },
+): Promise<ToolRun> {
+  const lines: string[] = [];
+  for (const component of context.components ?? []) {
+    if (lines.length >= MAX_SEARCH_MATCHES) break;
+    const prefix = `${component.name}/`;
+    if (component.root) {
+      const args = ["grep", "--no-color", "-n", "-F", "--max-count", "3", input.query];
+      if (input.glob) args.push("--", input.glob);
+      try {
+        const stdout = await runGitRaw(component.root, args);
+        for (const line of stdout.split("\n").filter(Boolean)) lines.push(`${prefix}${line}`);
+      } catch {
+        // No match in this component.
+      }
+      continue;
+    }
+    for (const file of context.files.filter((candidate) => candidate.path.startsWith(prefix))) {
+      (file.after ?? file.before ?? "").split("\n").forEach((line, index) => {
+        if (line.includes(input.query)) lines.push(`${file.path}:${index + 1}:${line.trim()}`);
+      });
+    }
+  }
+
+  const shown = lines.slice(0, MAX_SEARCH_MATCHES);
+  const consulted = [...new Set(shown.map((line) => line.split(":")[0]).filter(Boolean))];
+  return {
+    label: `searched ${context.components?.length ?? 0} repositories for "${input.query}" (${shown.length} match${shown.length === 1 ? "" : "es"})`,
+    text: clamp(shown.join("\n") || `No match for "${input.query}".`),
+    consulted,
+  };
+}
+
 export async function invokeRepoTool(
   context: ToolContext,
   name: string,
@@ -245,7 +328,13 @@ export async function invokeRepoTool(
 
   // An untrusted workspace withholds the filesystem and the symbol index; the tools
   // fall back to the changed files alone, which are only ever data.
-  const scoped = vscode.workspace.isTrusted ? context : { ...context, repositoryRoot: "" };
+  const scoped = vscode.workspace.isTrusted
+    ? context
+    : {
+        ...context,
+        repositoryRoot: "",
+        components: context.components?.map((component) => ({ ...component, root: "" })),
+      };
 
   switch (name) {
     case "find_symbol":

@@ -3,6 +3,7 @@ import type { Effort, Step } from "../model/changeset.js";
 import type { ReviewSession } from "../session.js";
 import { analyzeTestImpact } from "../analysis/test-impact.js";
 import {
+  buildComponentTree,
   buildFileTree,
   type FileNode,
   type FolderNode,
@@ -65,9 +66,12 @@ export class StepTreeProvider implements vscode.TreeDataProvider<TreeNode> {
 
   private rebuild(): void {
     const steps = this.session?.steps ?? [];
+    const components = this.session?.changeSet.components;
     this.roots = grouped()
       ? buildFileTree(steps)
-      : steps.map((step) => ({ kind: "file", step }) as TreeNode);
+      : components?.length
+        ? buildComponentTree(steps, components)
+        : steps.map((step) => ({ kind: "file", step }) as TreeNode);
 
     this.parents.clear();
     this.byStep.clear();
@@ -93,9 +97,9 @@ function grouped(): boolean {
 
 function folderItem(folder: FolderNode): vscode.TreeItem {
   const item = new vscode.TreeItem(folder.label, vscode.TreeItemCollapsibleState.Expanded);
-  item.description = `${folder.fileCount} file${folder.fileCount === 1 ? "" : "s"}`;
-  item.tooltip = folder.path;
-  item.iconPath = vscode.ThemeIcon.Folder;
+  item.description = folder.detail ?? `${folder.fileCount} file${folder.fileCount === 1 ? "" : "s"}`;
+  item.tooltip = folder.detail ? `${folder.label}\n${folder.detail}` : folder.path;
+  item.iconPath = folder.icon ? new vscode.ThemeIcon(folder.icon) : vscode.ThemeIcon.Folder;
   item.contextValue = "prAnalyzer.folder";
   item.id = `folder:${folder.path}`;
   return item;

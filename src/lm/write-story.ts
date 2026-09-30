@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import type { ToolRoot } from "../model/components.js";
 import type { ChangedFile, Step } from "../model/changeset.js";
 import { parseFirstJson } from "./json.js";
 import { ModelTimer } from "./lm-timing.js";
@@ -18,6 +19,8 @@ export async function writeStory(input: {
   steps: Step[];
   files: ChangedFile[];
   repositoryRoot: string;
+  /** Set for a review spanning several repositories. */
+  components?: ToolRoot[];
   onProgress?: (message: string) => void;
   onText?: (delta: string) => void;
   onModel?: (name: string) => void;
@@ -35,7 +38,11 @@ export async function writeStory(input: {
   try {
     const result = await runWithTools({
       model,
-      context: { repositoryRoot: input.repositoryRoot, files: input.files },
+      context: {
+        repositoryRoot: input.repositoryRoot,
+        files: input.files,
+        components: input.components,
+      },
       system: STORY_SYSTEM_PROMPT,
       prompt: buildStoryPrompt(input.steps, input.files),
       onProgress: input.onProgress,

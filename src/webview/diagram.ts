@@ -290,7 +290,94 @@ async function draw(definition: string): Promise<string> {
   throw lastError;
 }
 
-async function render(definition: string): Promise<void> {
+interface Placed {
+  element: Element;
+  rect: DOMRect;
+  /** The label text node that carries the number. */
+  label: Text;
+}
+
+/** The first text in a node's label, when it starts with a step number. */
+function numberedText(node: Element): Text | null {
+  const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+  for (let text = walker.nextNode() as Text | null; text; text = walker.nextNode() as Text | null) {
+    if (!text.data.trim()) continue;
+    return /^\s*\d+\./.test(text.data) ? text : null;
+  }
+  return null;
+}
+
+/** Groups items whose position along the reading axis is close enough to share a row. */
+function bands<T>(items: T[], at: (item: T) => number, tolerance: number): T[][] {
+  const sorted = [...items].sort((a, b) => at(a) - at(b));
+  const rows: T[][] = [];
+  for (const item of sorted) {
+    const row = rows.at(-1);
+    if (row && Math.abs(at(item) - at(row[0]!)) <= tolerance) row.push(item);
+    else rows.push([item]);
+  }
+  return rows;
+}
+
+/**
+ * Numbers the steps in the order they sit on screen.
+ *
+ * The numbers are chosen along the arrows before the diagram is laid out, but the layout
+ * answers to more than the arrows: a node nothing points at, or an arrow drawn against
+ * the flow, lands wherever it fits, and 1, 2 and 3 can end up at the bottom. Renumbering
+ * from the drawn positions makes the map read top to bottom — box by box, and within a
+ * box row by row — whatever the layout decided.
+ */
+function renumberByPosition(horizontal: boolean): void {
+  if (!svg) return;
+  const placed: Placed[] = [];
+  for (const node of svg.querySelectorAll("g.node")) {
+    const label = numberedText(node);
+    if (label) placed.push({ element: node, rect: node.getBoundingClientRect(), label });
+  }
+  if (placed.length < 2) return;
+
+  const clusters = [...svg.querySelectorAll("g.cluster")].map((cluster) => ({
+    cluster,
+    rect: (cluster.querySelector("rect") ?? cluster).getBoundingClientRect(),
+  }));
+  const along = (rect: DOMRect): number => (horizontal ? rect.left : rect.top);
+  const across = (rect: DOMRect): number => (horizontal ? rect.top : rect.left);
+  const centre = (rect: DOMRect): number =>
+    horizontal ? rect.left + rect.width / 2 : rect.top + rect.height / 2;
+
+  // Each node belongs to the smallest box that holds it; a node in no box stands alone.
+  const units = new Map<Element | Placed, { rect: DOMRect; nodes: Placed[] }>();
+  for (const item of placed) {
+    const x = item.rect.left + item.rect.width / 2;
+    const y = item.rect.top + item.rect.height / 2;
+    const owner = clusters
+      .filter(({ rect }) => x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom)
+      .sort((a, b) => a.rect.width * a.rect.height - b.rect.width * b.rect.height)[0];
+    const key = owner?.cluster ?? item;
+    const unit = units.get(key) ?? { rect: owner?.rect ?? item.rect, nodes: [] };
+    unit.nodes.push(item);
+    units.set(key, unit);
+  }
+
+  const sizes = placed.map((item) => (horizontal ? item.rect.width : item.rect.height)).sort((a, b) => a - b);
+  const tolerance = (sizes[Math.floor(sizes.length / 2)] ?? 40) / 2;
+
+  const order: Placed[] = [];
+  for (const row of bands([...units.values()], (unit) => along(unit.rect), tolerance)) {
+    for (const unit of row.sort((a, b) => across(a.rect) - across(b.rect))) {
+      for (const line of bands(unit.nodes, (item) => centre(item.rect), tolerance)) {
+        order.push(...line.sort((a, b) => across(a.rect) - across(b.rect)));
+      }
+    }
+  }
+
+  order.forEach((item, index) => {
+    item.label.data = item.label.data.replace(/^(\s*)\d+\./, `$1${index + 1}.`);
+  });
+}
+
+async function render(definition: string, view?: string): Promise<void> {
   surface.innerHTML = "";
   svg = null;
   try {
@@ -322,6 +409,10 @@ async function render(definition: string): Promise<void> {
   // labels unreadable, which is the one thing a map must not do.
   if (natural.height > natural.width * aspect()) fitWidth();
   else fitAll();
+
+  // The drawn map is numbered by where its steps landed; the file map keeps the numbers
+  // of the Files list, which it has to match.
+  if (view === "change") renumberByPosition(/^\s*flowchart\s+LR/.test(definition));
 
   for (const node of svg.querySelectorAll("g.node")) {
     node.setAttribute("tabindex", "0");
@@ -491,7 +582,7 @@ window.addEventListener("message", (event) => {
     ok?: boolean;
   };
   if (message.type === "render" && message.definition) {
-    void render(message.definition);
+    void render(message.definition, message.view);
   }
   if (message.type === "busy") setBusy(message.text, message.detail);
   if (message.type === "source" && message.text !== undefined) {

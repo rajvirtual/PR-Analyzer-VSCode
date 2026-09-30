@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildFileTree, flatten, type FolderNode } from "../src/analysis/file-tree.js";
+import {
+  buildComponentTree,
+  buildFileTree,
+  flatten,
+  type FolderNode,
+} from "../src/analysis/file-tree.js";
 import type { ChangedFile, Step } from "../src/model/changeset.js";
 
 function step(order: number, path: string, title?: string): Step {
@@ -86,3 +91,28 @@ describe("buildFileTree", () => {
     ).toEqual(["apple.cs", "Zebra.cs"]);
   });
 });
+
+describe("buildComponentTree", () => {
+  const component = (name: string, id: number, title?: string) => ({
+    name,
+    repositoryRoot: "",
+    identity: { organization: "o", project: "p", repository: name, pullRequestId: id },
+    url: "u",
+    title,
+  });
+  const step = (order: number, path: string) =>
+    ({ id: `s${order}`, order, role: "implementation", file: { path, changeType: "edit", before: "", after: "" } }) as never;
+
+  it("puts each repository's steps under one row, in reading order, keeping the numbering", () => {
+    const tree = buildComponentTree(
+      [step(1, "Workflow/a.java"), step(2, "Workflow/b.java"), step(3, "Dags/d.py")],
+      [component("Dags", 2), component("Workflow", 1, "Offload manifests")],
+    );
+    expect(tree.map((node) => (node.kind === "folder" ? node.label : ""))).toEqual(["Workflow", "Dags"]);
+    const first = tree[0]!;
+    expect(first.kind === "folder" && first.detail).toBe("!1 · 2 files · Offload manifests");
+    expect(first.kind === "folder" && first.icon).toBe("repo");
+    expect(first.kind === "folder" && first.children.map((child) => child.kind === "file" && child.step.order)).toEqual([1, 2]);
+  });
+});
+

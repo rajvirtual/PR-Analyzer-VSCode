@@ -6,6 +6,8 @@
  * downstream works for both without knowing which it was given.
  */
 
+import type { PullRequestIdentity } from "../ado/pr-url.js";
+
 export type ChangeType = "add" | "edit" | "delete" | "rename";
 
 /** Why a side has no text even though the change type implies it should have some. */
@@ -27,7 +29,28 @@ export interface ChangedFile {
   afterUnavailable?: SideUnavailable;
 }
 
+/**
+ * One pull request within a review that spans several repositories.
+ *
+ * Every path the component contributes is prefixed with its name, so files from two
+ * repositories can sit in one list without colliding.
+ */
+export interface Component {
+  /** The path prefix, which is the repository name unless two components share one. */
+  name: string;
+  /** Where its checkout is, or empty when there is none. */
+  repositoryRoot: string;
+  identity: PullRequestIdentity;
+  url: string;
+  title?: string;
+  sourceRef?: string;
+  targetRef?: string;
+  isDraft?: boolean;
+  headCommit?: string;
+}
+
 export interface ChangeSet {
+  /** Empty when the change has no single checkout: a pull request without one, or a feature. */
   repositoryRoot: string;
   /** Shown to the reader, for example "feature/x vs origin/main". */
   label: string;
@@ -38,6 +61,11 @@ export interface ChangeSet {
   files: ChangedFile[];
   /** Files that were skipped, and why, so nothing disappears silently. */
   skipped: { path: string; reason: string }[];
+  /**
+   * Set only for a review spanning several pull requests. Absent, the change is one
+   * repository and its paths are relative to `repositoryRoot`, exactly as before.
+   */
+  components?: Component[];
 }
 
 /** How much careful review a file's change needs, as rated by the model. */

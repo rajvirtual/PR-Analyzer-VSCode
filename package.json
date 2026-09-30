@@ -2,7 +2,7 @@
   "name": "pr-analyzer",
   "displayName": "AI PR Analyzer",
   "description": "Walk a large change in execution order: ordered steps, native diffs, and a map of how the files connect",
-  "version": "0.5.9",
+  "version": "0.6.0",
   "publisher": "rajeshvijay",
   "private": true,
   "license": "MIT",
@@ -82,6 +82,11 @@
       {
         "view": "prAnalyzer.files",
         "contents": "Review the changes on this branch, ordered so they read as a flow.\n[Review this branch](command:prAnalyzer.reviewBranch)\nWorkspace holds several repositories? Pick the one to review.\n[Review a branch in another repository](command:prAnalyzer.reviewRepository)\nOr review a pull request that is not checked out.\n[Review a pull request](command:prAnalyzer.reviewPullRequest)"
+      },
+      {
+        "view": "prAnalyzer.files",
+        "contents": "Or review a feature whose pull requests span several repositories, as one change.\n[Review a feature across pull requests](command:prAnalyzer.reviewFeature)",
+        "when": "config.prAnalyzer.featureReview"
       }
     ],
     "commands": [
@@ -96,6 +101,18 @@
         "title": "Review a branch in another repository…",
         "category": "AI PR Analyzer",
         "icon": "$(repo)"
+      },
+      {
+        "command": "prAnalyzer.reviewFeature",
+        "title": "Review a feature across pull requests…",
+        "category": "AI PR Analyzer",
+        "icon": "$(git-merge)"
+      },
+      {
+        "command": "prAnalyzer.checkFeature",
+        "title": "Check the pull requests fit together",
+        "category": "AI PR Analyzer",
+        "icon": "$(git-compare)"
       },
       {
         "command": "prAnalyzer.reviewPullRequest",
@@ -279,6 +296,16 @@
           "group": "1_review@3"
         },
         {
+          "command": "prAnalyzer.reviewFeature",
+          "when": "view == prAnalyzer.files && config.prAnalyzer.featureReview",
+          "group": "1_review@4"
+        },
+        {
+          "command": "prAnalyzer.checkFeature",
+          "when": "view == prAnalyzer.files && prAnalyzer.isFeature",
+          "group": "navigation@6"
+        },
+        {
           "command": "prAnalyzer.showStory",
           "when": "view == prAnalyzer.files && prAnalyzer.active",
           "group": "navigation@5"
@@ -315,6 +342,14 @@
         {
           "command": "prAnalyzer.explainHunk",
           "when": "false"
+        },
+        {
+          "command": "prAnalyzer.reviewFeature",
+          "when": "config.prAnalyzer.featureReview"
+        },
+        {
+          "command": "prAnalyzer.checkFeature",
+          "when": "prAnalyzer.isFeature"
         }
       ]
     },
@@ -371,6 +406,11 @@
           "type": "number",
           "default": 15,
           "description": "Cached clones not used within this many days are removed on startup. Set to 0 to keep them indefinitely."
+        },
+        "prAnalyzer.featureReview": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Offer **Review a feature across pull requests**, which reviews related pull requests in several repositories as one change — found by a shared `AB#` work item, branch, or link — with a map of how they connect and checks that they fit together."
         },
         "prAnalyzer.filesView": {
           "type": "string",

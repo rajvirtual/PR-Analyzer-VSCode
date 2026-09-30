@@ -163,6 +163,47 @@ changed files, a clone is looked for in three places, cheapest first:
 The pull request is then checked out into a temporary worktree, which is removed when you
 move on. Continuing without a clone still works, with only the changed files.
 
+## Reviewing a feature across pull requests
+
+A feature often lands as several pull requests in different repositories — a service, a
+library, the pipelines that use it, a deployment package. Each can look right on its own while
+the feature is broken where they meet. This reviews them together, as one change.
+
+Run **AI PR Analyzer: Review a feature across pull requests…**, or press its button in the
+AI PR Analyzer view, and paste one or more pull request URLs. To hide it, turn off
+`prAnalyzer.featureReview`.
+
+1. **The rest are found for you.** Every active pull request in the organisation — all
+   projects, since a feature can span them — is checked for the same `AB#` work item in its
+   title or description, the same source branch, a formal link from the work item, or a link
+   to or from the one you pasted. You get a checklist with the reason for each; untick any that
+   do not belong.
+2. **One review, in the order it runs.** Each pull request is read and checked out as usual,
+   and the Files view shows one row per repository with its files beneath, numbered 1 to n
+   across the whole feature. The repositories are read in execution order — a caller before
+   what it calls, so a service comes before the DAG it triggers, and the DAG before the
+   library it imports — with documentation last. Where the code does not say which calls
+   which, the repository that looks like where the flow starts comes first. F7, Explain,
+   `@pr` chat, notes and the read-through all work across the feature, and the model's
+   lookups reach every repository. The merge order in the fit report is the other way
+   round: what is depended on first.
+3. **A map of how they connect.** The map draws one box per repository, with the arrows between
+   them labelled by what crosses: the DAG id one triggers, the module one imports, the package
+   version one pins. Those links are found in the code first — imports, pinned versions, names
+   one side declares and another calls, and identifier strings such as DAG ids and config keys
+   that both use — and given to the model as facts rather than left for it to guess.
+4. **Checks that they fit.** **Check the pull requests fit together**, on the Files view's
+   toolbar, opens a report: a suggested merge order and why, and anything that does not line up
+   — a name one side removes that another still calls, a pinned version the library does not
+   publish, a string one side stops using while another still does, pull requests merging into
+   different branches. A summary appears when the feature loads.
+5. **Share it on every pull request.** **Post to PR** on the map posts it to each of the
+   feature's pull requests, each with a list of the others, so whoever opens any of them sees the
+   whole.
+
+**Add a note** posts to the pull request that owns the file on screen. The links it finds are
+heuristics: they are shown with the file each was seen in, so they can be checked.
+
 ## Commands
 
 | Command | What it does |
@@ -170,11 +211,13 @@ move on. Continuing without a clone still works, with only the changed files.
 | `AI PR Analyzer: Review this branch` | Reads your branch against its merge base |
 | `AI PR Analyzer: Review a branch in another repository…` | Picks a repository in the workspace, or any folder, and reviews its branch |
 | `AI PR Analyzer: Review a pull request by URL` | Reads an Azure DevOps pull request at its pinned commits |
+| `AI PR Analyzer: Review a feature across pull requests…` | Finds a feature's pull requests across repositories and reviews them as one change |
+| `AI PR Analyzer: Check the pull requests fit together` | Merge order, links between a feature's pull requests, and anything that does not line up |
 | `AI PR Analyzer: Read this change end to end` | Opens the read-through of the whole change |
 | `AI PR Analyzer: Map intent to evidence` | Lays each stated intent beside the files and tests that deliver it |
 | `AI PR Analyzer: Open the map` | Draws the diagram |
 | `AI PR Analyzer: Explain this change` | Opens chat on the change you are looking at |
-| `AI PR Analyzer: Add a review note to the pull request` | Posts a comment on the pull request, anchored to the file and line on screen |
+| `AI PR Analyzer: Add a review note to the pull request` | Posts a comment on the pull request, anchored to the file and line on screen. In a feature, on the pull request that owns the file |
 | `AI PR Analyzer: Next change, then next file` | `F7` / `Alt+Down` |
 | `AI PR Analyzer: Previous change, then previous file` | `Shift+F7` / `Alt+Up` |
 | `AI PR Analyzer: Group the files by folder, or flatten them` | Switches the Files view between reading order and folders |
@@ -194,6 +237,7 @@ move on. Continuing without a clone still works, with only the changed files.
 | `prAnalyzer.ordering` | `model` | `model` asks a model to order the files; `references` uses the reference graph alone and spends nothing |
 | `prAnalyzer.model` | *(empty)* | Model for ordering and the diagram. Empty follows the model you last used in `@pr` chat |
 | `prAnalyzer.repositorySearchPaths` | `[]` | Folders holding your clones. Each is checked for a directory named after the repository. Choosing **Locate it**, or running **AI PR Analyzer: Add a folder to search for clones**, adds one for you |
+| `prAnalyzer.featureReview` | `true` | Offers **Review a feature across pull requests…**. Turn off to hide it |
 | `prAnalyzer.filesView` | `flat` | `flat` is one numbered list in reading order, matching `F7` exactly. `folders` shows the repository's shape, sorted alphabetically like a pull request page — the reading order is not the list's order there, so the step number moves into the description. The tree icon above the list switches between them |
 
 ## Moving around the diagram
@@ -204,11 +248,18 @@ move on. Continuing without a clone still works, with only the changed files.
 | Zoom | `Ctrl`/`Cmd` and the wheel, or the **+** and **&minus;** buttons |
 | Pan | Drag the diagram itself |
 
+The steps of a drawn map are numbered in the order they sit on screen — box by box from the
+top, and within a box row by row — so 1, 2, 3 read straight down however the layout placed them.
+The file map keeps the numbers of the Files list.
+
 When you are reviewing a pull request, **Post to PR** on the map's toolbar posts the whole map —
 not just the part on screen — as a new comment on the pull request. The map is uploaded as a PNG
 attachment, since a detailed map can exceed the description's length limit and comments do not
-reliably render mermaid. A link to AI PR Analyzer on the Marketplace follows beneath it, so
+reliably render mermaid. A comment shrinks the image to its width, so the image links to the
+full-size file, and **Open the full-size map** beneath it opens it on its own, where the
+browser zooms it. A link to AI PR Analyzer on the Marketplace follows, so
 whoever reads the comment can draw a map of their own. You are asked to confirm first. The button is not shown when reviewing a branch.
+For a feature, the map is posted to every one of its pull requests, each listing the others.
 
 ## When git goes wrong
 
@@ -228,7 +279,9 @@ The extension talks to two services, both with your existing credentials:
 - **Azure DevOps**, when you review a pull request by URL, to fetch that pull request's files
   and, if you map its intent, its description and linked work items; when you add a review
   note, to post that comment back to the pull request; and when you press **Post to PR** on the
-  map, to upload the map as an image attachment and post a comment showing it. VS Code's own Microsoft sign-in is used,
+  map, to upload the map as an image attachment and post a comment showing it. Reviewing a
+  feature also lists the active pull requests in the organisation's projects and reads the work
+  items they mention, to find the related ones. VS Code's own Microsoft sign-in is used,
   or a token you supplied.
 
 Nothing is sent anywhere else, and nothing is written outside VS Code's own storage.

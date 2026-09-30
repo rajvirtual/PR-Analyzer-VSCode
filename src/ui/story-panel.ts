@@ -91,6 +91,12 @@ export class StoryPanel {
     this.post({ type: "busy", message, model });
   }
 
+  /** A fresh read-through replaces the last one rather than appending beneath it. */
+  begin(message: string, model: string): void {
+    this.post({ type: "clear" });
+    this.busy(message, model);
+  }
+
   failed(reason: string): void {
     this.generating = false;
     this.post({ type: "failed", reason });
@@ -213,13 +219,6 @@ function shell(): string {
       regenerate.disabled = false;
     }
 
-    function stopTicking() {
-      if (ticker) window.clearInterval(ticker);
-      ticker = undefined;
-      cancel.hidden = true;
-      regenerate.disabled = false;
-    }
-
     regenerate.addEventListener("click", () => vscode.postMessage({ type: "regenerate" }));
     cancel.addEventListener("click", () => {
       stopTicking();
@@ -247,6 +246,9 @@ function shell(): string {
           ticker = window.setInterval(waiting, 1000);
         }
         waiting();
+      }
+      if (message.type === "clear") {
+        content.replaceChildren();
       }
       if (message.type === "append") {
         content.insertAdjacentHTML("beforeend", message.html);

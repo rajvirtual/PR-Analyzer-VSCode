@@ -2,6 +2,39 @@
 
 All notable changes to PR Analyzer are recorded here.
 
+## [0.6.0] - 2026-09-30
+
+### Added
+- **Review a feature across pull requests** (on by default; hide with `prAnalyzer.featureReview`) — reviews
+  the pull requests of one feature, in several repositories, as a single change.
+  - Paste one pull request; the others are found across every project in the organisation by a
+    shared `AB#` work item, source branch, formal work item link, or a link between them, and
+    offered as a checklist with the reason for each.
+  - Files are listed under a row per repository, and the repositories are read in execution
+    order — a caller before what it calls, documentation last. Explain, chat, notes and the
+    read-through reach every repository.
+  - A feature map draws one box per repository, with arrows labelled by what crosses between
+    them. The links are found in the code first — imports, pinned versions, names declared on one
+    side and used on the other, and shared identifiers such as DAG ids and config keys.
+  - **Check the pull requests fit together** reports a suggested merge order and anything that
+    does not line up: removed names still used, pinned versions not published, strings dropped on
+    one side only, and different target branches.
+  - **Post to PR** posts the feature map to every pull request, each listing the others.
+
+### Changed
+- A drawn map's steps are numbered in the order they sit on screen, top to bottom, so they read
+  consecutively whatever the layout decided. The file map keeps the Files list's numbers.
+- Otherwise nothing for a single branch or pull request: without a feature, every path, prompt,
+  cache key and comment is as it was.
+
+### Fixed
+- A map posted to a pull request was shrunk to the comment's width, too small to read and with no
+  way to zoom. The image now links to the full-size file, with an **Open the full-size map** link
+  beneath it; opened on its own, the browser zooms it.
+- The read-through's progress line stayed on screen after it finished, frozen at its last step,
+  which read as a hang. Writing it again now starts from a clear panel rather than appending the
+  new sections under the old ones.
+
 ## [0.5.9] - 2026-09-29
 
 ### Changed

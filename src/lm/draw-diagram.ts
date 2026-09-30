@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import type { ToolRoot } from "../model/components.js";
 import type { ChangedFile, Step } from "../model/changeset.js";
 import type { SymbolGraph } from "../analysis/flow-order.js";
 import { renumberByFlow } from "../analysis/renumber.js";
@@ -31,10 +32,17 @@ export async function drawDiagram(input: {
   files: ChangedFile[];
   graph: SymbolGraph;
   repositoryRoot: string;
+  /** Set for a review spanning several repositories. */
+  components?: ToolRoot[];
   onProgress?: (label: string) => void;
   /** The mermaid as it is written, so the reader watches it rather than a spinner. */
   onSource?: (mermaid: string) => void;
   onModel?: (name: string) => void;
+  /**
+   * The whole prompt, replacing the locked single pull request one. A feature spanning
+   * several pull requests draws with its own; the output contract is the same.
+   */
+  prompt?: string;
   token: vscode.CancellationToken;
 }): Promise<DrawOutcome> {
   const timer = new ModelTimer("diagram");
@@ -54,8 +62,14 @@ export async function drawDiagram(input: {
     let reply = "";
     const result = await runWithTools({
       model,
-      context: { repositoryRoot: input.repositoryRoot, files: input.files },
-      prompt: `${DIAGRAM_SYSTEM_PROMPT}\n\n${buildDiagramPrompt(input.steps, input.files, input.graph)}`,
+      context: {
+        repositoryRoot: input.repositoryRoot,
+        files: input.files,
+        components: input.components,
+      },
+      prompt:
+        input.prompt ??
+        `${DIAGRAM_SYSTEM_PROMPT}\n\n${buildDiagramPrompt(input.steps, input.files, input.graph)}`,
       onProgress: input.onProgress,
       onText: (delta) => {
         reply += delta;

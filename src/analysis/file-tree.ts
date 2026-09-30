@@ -1,4 +1,4 @@
-import type { Step } from "../model/changeset.js";
+import type { Component, Step } from "../model/changeset.js";
 
 /**
  * The changed files as a folder tree, in the shape a pull request page shows them.
@@ -26,6 +26,10 @@ export interface FolderNode {
   order: number;
   lastOrder: number;
   fileCount: number;
+  /** Shown beside the label in place of the file count, for a repository in a feature. */
+  detail?: string;
+  /** A codicon name, when a folder stands for something other than a directory. */
+  icon?: string;
 }
 
 export type TreeNode = FileNode | FolderNode;
@@ -124,4 +128,39 @@ export function flatten(nodes: TreeNode[]): Step[] {
     else steps.push(...flatten(node.children));
   }
   return steps;
+}
+
+/**
+ * The flat list for a feature: one row per repository, in reading order, holding its
+ * steps. A feature reads component by component, so the numbering still runs 1..n down
+ * the page and F7 still walks it top to bottom.
+ */
+export function buildComponentTree(steps: Step[], components: Component[]): TreeNode[] {
+  const groups = new Map<string, Step[]>();
+  const unowned: Step[] = [];
+  for (const step of steps) {
+    const owner = components.find((component) => step.file.path.startsWith(`${component.name}/`));
+    if (!owner) {
+      unowned.push(step);
+      continue;
+    }
+    groups.set(owner.name, [...(groups.get(owner.name) ?? []), step]);
+  }
+
+  const nodes: TreeNode[] = [...groups.entries()].map(([name, owned]) => {
+    const component = components.find((candidate) => candidate.name === name)!;
+    const count = `${owned.length} file${owned.length === 1 ? "" : "s"}`;
+    return {
+      kind: "folder",
+      path: `component:${name}`,
+      label: name,
+      children: owned.map((step) => ({ kind: "file", step }) as TreeNode),
+      order: owned[0]!.order,
+      lastOrder: owned.at(-1)!.order,
+      fileCount: owned.length,
+      detail: `!${component.identity.pullRequestId} · ${count}${component.title ? ` · ${component.title}` : ""}`,
+      icon: "repo",
+    };
+  });
+  return [...nodes, ...unowned.map((step) => ({ kind: "file", step }) as TreeNode)];
 }

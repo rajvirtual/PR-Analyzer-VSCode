@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import type { ToolRoot } from "../model/components.js";
 import type { ChangedFile } from "../model/changeset.js";
 import { parseFirstJson } from "./json.js";
 import { runWithTools } from "./run-with-tools.js";
@@ -20,6 +21,8 @@ export async function writeIntent(input: {
   intent: string;
   files: ChangedFile[];
   repositoryRoot: string;
+  /** Set for a review spanning several repositories. */
+  components?: ToolRoot[];
   onProgress?: (message: string) => void;
   onModel?: (name: string) => void;
   token: vscode.CancellationToken;
@@ -31,7 +34,11 @@ export async function writeIntent(input: {
   try {
     const result = await runWithTools({
       model,
-      context: { repositoryRoot: input.repositoryRoot, files: input.files },
+      context: {
+        repositoryRoot: input.repositoryRoot,
+        files: input.files,
+        components: input.components,
+      },
       system: INTENT_SYSTEM_PROMPT,
       prompt: buildIntentPrompt(input.intent, input.files),
       onProgress: input.onProgress,

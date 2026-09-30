@@ -8,6 +8,7 @@ import { beginExclusiveModelWork, clearExclusiveModelWork } from "../lm/model-ga
 import type { ActivityStatus } from "./activity-status.js";
 import { pickStructureModel } from "../lm/select-model.js";
 import type { DrawnDiagram } from "../lm/diagram-prompt.js";
+import type { ToolRoot } from "../model/components.js";
 
 type View = "change" | "files";
 
@@ -25,6 +26,12 @@ export interface DiagramCache {
 
 /** Posts the rendered map to the pull request under review; resolves true once posted. */
 export type DiagramPublisher = (image: Uint8Array) => Promise<boolean>;
+
+export interface DiagramOptions {
+  publisher?: DiagramPublisher;
+  /** Replaces the single pull request drawing, for a feature spanning several. */
+  drawing?: { prompt: string; components?: ToolRoot[]; title?: string };
+}
 
 interface PanelMessage {
   type: string;
@@ -62,12 +69,12 @@ export class DiagramPanel {
     private repositoryRoot: string,
     private readonly onSelect: (stepId: string) => void,
     private readonly cache: DiagramCache,
-    private publisher: DiagramPublisher | undefined,
+    private options: DiagramOptions,
   ) {
     this.drawn = this.cache.load() ?? null;
     this.panel = vscode.window.createWebviewPanel(
       "prAnalyzer.diagram",
-      "PR Analyzer: map",
+      options.drawing?.title ?? "PR Analyzer: map",
       { viewColumn: vscode.ViewColumn.Active, preserveFocus: false },
       {
         enableScripts: true,
@@ -115,10 +122,10 @@ export class DiagramPanel {
     repositoryRoot: string,
     onSelect: (stepId: string) => void,
     cache: DiagramCache,
-    publisher?: DiagramPublisher,
+    options: DiagramOptions = {},
   ): DiagramPanel {
     if (DiagramPanel.current) {
-      DiagramPanel.current.update(steps, files, graph, repositoryRoot, publisher);
+      DiagramPanel.current.update(steps, files, graph, repositoryRoot, options);
       DiagramPanel.current.panel.reveal();
       return DiagramPanel.current;
     }
@@ -130,7 +137,7 @@ export class DiagramPanel {
       repositoryRoot,
       onSelect,
       cache,
-      publisher,
+      options,
     );
     return DiagramPanel.current;
   }
@@ -155,13 +162,14 @@ export class DiagramPanel {
     files: ChangedFile[],
     graph: SymbolGraph,
     repositoryRoot: string,
-    publisher?: DiagramPublisher,
+    options: DiagramOptions = {},
   ): void {
     this.steps = steps;
     this.files = files;
     this.graph = graph;
     this.repositoryRoot = repositoryRoot;
-    this.publisher = publisher;
+    this.options = options;
+    this.panel.title = options.drawing?.title ?? "PR Analyzer: map";
     this.announcePublisher();
     this.drawn = this.cache.load() ?? null;
     this.drawGeneration += 1;
@@ -171,20 +179,24 @@ export class DiagramPanel {
   /** The post button only makes sense when the review has a pull request behind it. */
   private announcePublisher(): void {
     if (!this.ready) return;
-    void this.panel.webview.postMessage({ type: "canPublish", value: Boolean(this.publisher) });
+    void this.panel.webview.postMessage({
+      type: "canPublish",
+      value: Boolean(this.options.publisher),
+    });
   }
 
   private async publish(message: PanelMessage): Promise<void> {
     let posted = false;
     try {
-      if (!this.publisher) return;
+      const publisher = this.options.publisher;
+      if (!publisher) return;
       if (!message.image) {
         void vscode.window.showErrorMessage(
           `PR Analyzer: the map could not be turned into an image. ${message.reason ?? ""}`.trim(),
         );
         return;
       }
-      posted = await this.publisher(Buffer.from(message.image, "base64"));
+      posted = await publisher(Buffer.from(message.image, "base64"));
     } finally {
       void this.panel.webview.postMessage({ type: "published", ok: posted });
     }
@@ -284,6 +296,8 @@ export class DiagramPanel {
         files: this.files,
         graph: this.graph,
         repositoryRoot: this.repositoryRoot,
+        components: this.options.drawing?.components,
+        prompt: this.options.drawing?.prompt,
         onProgress: (label) => {
           DiagramPanel.activity?.start("diagram", label);
           void this.panel.webview.postMessage({ type: "busy", detail: label });

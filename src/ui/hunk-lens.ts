@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { toChangePath } from "../model/components.js";
 import { hunksOf } from "../session.js";
 import type { ReviewSession } from "../session.js";
 import { matchChangedFile } from "../analysis/match-file.js";
@@ -40,11 +41,11 @@ export class HunkLensProvider implements vscode.CodeLensProvider {
 
   /** The changed file this document shows, whether it is the real one or ours. */
   private fileFor(document: vscode.TextDocument) {
-    const files = this.session?.changeSet.files;
-    if (!files) return undefined;
+    const changeSet = this.session?.changeSet;
+    if (!changeSet) return undefined;
     return matchChangedFile(
-      files,
-      document.uri.scheme === "file" ? document.uri.fsPath : document.uri.path,
+      changeSet.files,
+      document.uri.scheme === "file" ? toChangePath(changeSet, document.uri.fsPath) : document.uri.path,
     );
   }
 }
