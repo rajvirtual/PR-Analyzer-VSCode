@@ -339,7 +339,9 @@ first.
   imports, pinned versions, shared names and identifier strings. They are shown with the file
   each was seen in so they can be checked, and a link made only through configuration outside
   the change is not seen.
-- The diagram costs a request each time it is drawn; it is not cached between sessions.
+- **Drawing the diagram costs a model request.** A drawn map is kept per commit, so reopening
+  it — even after restarting VS Code — is instant and free. A new commit, or **Redraw**, draws
+  it again and costs another request.
 
 ## Installing it
 
