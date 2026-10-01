@@ -2,7 +2,7 @@
   "name": "pr-analyzer",
   "displayName": "AI PR Analyzer",
   "description": "Walk a large change in execution order: ordered steps, native diffs, and a map of how the files connect",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "publisher": "rajeshvijay",
   "private": true,
   "license": "MIT",

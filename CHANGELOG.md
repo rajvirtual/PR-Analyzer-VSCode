@@ -2,6 +2,17 @@
 
 All notable changes to PR Analyzer are recorded here.
 
+## [0.6.1] - 2026-10-01
+
+### Changed
+- The README introduces feature review where a reader meets it first — the overview, What it
+  does, and Getting started — and Known limitations says how related pull requests and the
+  links between them are found.
+
+### Fixed
+- Known limitations said the diagram was not cached between sessions; a drawn map has been kept
+  per commit since 0.5.0, so reopening it is instant until a new commit or **Redraw**.
+
 ## [0.6.0] - 2026-09-30
 
 ### Added
