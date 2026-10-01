@@ -7,6 +7,10 @@ files into the flow a reader should follow, opens each one at the change itself,
 a diagram of what the change actually does — so you can understand a branch before you
 start reading it.
 
+When one feature spans several pull requests in different repositories — a service, a library,
+the pipelines that use it — it reviews them together as one change, with a map of where they
+meet and a check that they fit.
+
 Built for reviewing AI-written changes, where the volume is high and the reviewer has no
 memory of writing any of it.
 
@@ -97,6 +101,14 @@ the files you had already read still marked — nothing is re-read from the top.
 request, anchored to the file and line on screen, so a finding made here lands in the review
 everyone else is reading.
 
+**Reviews a feature across pull requests.** Paste one pull request and the others belonging to
+the same work are found for you — by a shared `AB#` work item, branch, or link, in any project
+of the organisation — then read together as one change: one row per repository, in the order
+the feature runs. The map draws one box per repository with the links between them labelled,
+and **Check the pull requests fit together** reports a merge order and anything that does not
+line up, such as a name one side removes that another still calls. See
+[Reviewing a feature across pull requests](#reviewing-a-feature-across-pull-requests).
+
 ## Requirements
 
 - VS Code 1.95 or later
@@ -122,7 +134,7 @@ Both `dev.azure.com` and the older `*.visualstudio.com` hosts are understood.
 
 ## Getting started
 
-Two ways in. Neither asks you to prepare anything by hand.
+Three ways in. None asks you to prepare anything by hand.
 
 **A pull request, from nothing.** Run **AI PR Analyzer: Review a pull request by URL** and paste
 an Azure DevOps link. That is the whole setup: the repository does not have to be open,
@@ -132,6 +144,11 @@ into a worktree of its own, removed when you move on. Your branch is never touch
 **A branch you are already on.** Open the repository and run **AI PR Analyzer: Review this
 branch**, or press the button in the AI PR Analyzer view. Uncommitted work is included, so there
 is nothing to push or even commit first.
+
+**A feature spread over several pull requests.** Run **AI PR Analyzer: Review a feature across
+pull requests…** and paste any one of them. The rest are offered as a checklist, each with the
+reason it was matched; untick any that do not belong. Details are in
+[Reviewing a feature across pull requests](#reviewing-a-feature-across-pull-requests).
 
 **A workspace holding several repositories.** "This branch" is the one checked out in the
 repository of the file on screen. To switch without opening a file, run **AI PR Analyzer:
@@ -314,6 +331,14 @@ first.
 - **Binary files are skipped**, and reported as skipped.
 - **Only Azure DevOps** pull request URLs are understood.
 - **Renames are detected but lightly tested.**
+- **A feature's related pull requests are found by matching**, not by a formal link: a shared
+  `AB#` work item in the title or description, the same source branch, or a link between them.
+  One that shares none of these is missed — paste it as well — and one that shares a work item
+  by coincidence is offered; untick it.
+- **The links between a feature's repositories are found by reading the changed code** —
+  imports, pinned versions, shared names and identifier strings. They are shown with the file
+  each was seen in so they can be checked, and a link made only through configuration outside
+  the change is not seen.
 - The diagram costs a request each time it is drawn; it is not cached between sessions.
 
 ## Installing it
